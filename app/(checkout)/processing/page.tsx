@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// app/(checkout)/processing/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,30 +11,28 @@ import { Separator } from "@/components/ui/separator";
 import { Copy, Check, QrCode, RefreshCw, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface ProcessingPageProps {
-  searchParams: {
-    orderId: string;
-    qrCode: string;
-    qrCodeUrl: string;
-    expiresAt: string;
-    status: string;
-  };
-}
-
-export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
+export default function ProcessingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isChecking, setIsChecking] = useState(false);
 
+  // Extrair parâmetros da URL de forma segura
+  const orderId = searchParams.get("orderId") || "";
+  const qrCode = searchParams.get("qrCode") || "";
+  const qrCodeUrl = searchParams.get("qrCodeUrl") || "";
+  const expiresAt = searchParams.get("expiresAt") || "";
+  const status = searchParams.get("status") || "";
+
   // Calcula o tempo restante baseado no expiresAt
   useEffect(() => {
-    if (searchParams.expiresAt) {
+    if (expiresAt) {
       const calculateTimeLeft = () => {
-        const expiresAt = new Date(searchParams.expiresAt).getTime();
+        const expiresAtTime = new Date(expiresAt).getTime();
         const now = new Date().getTime();
-        const difference = expiresAt - now;
+        const difference = expiresAtTime - now;
         return Math.max(0, Math.floor(difference / 1000));
       };
 
@@ -51,21 +48,19 @@ export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
 
       return () => clearInterval(timer);
     }
-  }, [searchParams.expiresAt]);
+  }, [expiresAt]);
 
   // Verifica o status do pagamento
   useEffect(() => {
     const checkPaymentStatus = async () => {
       try {
-        const response = await fetch(
-          `/api/orders/${searchParams.orderId}/status`
-        );
+        const response = await fetch(`/api/orders/${orderId}/status`);
         const data = await response.json();
 
         if (data.status === "paid") {
-          router.push(`/success?orderId=${searchParams.orderId}`);
+          router.push(`/success?orderId=${orderId}`);
         } else if (data.status === "failed" || data.status === "canceled") {
-          router.push(`/error?orderId=${searchParams.orderId}`);
+          router.push(`/error?orderId=${orderId}`);
         }
       } catch (error) {
         console.error("Erro ao verificar status:", error);
@@ -74,11 +69,11 @@ export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
 
     const interval = setInterval(checkPaymentStatus, 5000);
     return () => clearInterval(interval);
-  }, [router, searchParams.orderId]);
+  }, [router, orderId]);
 
   const handleCopyPix = async () => {
     try {
-      await navigator.clipboard.writeText(searchParams.qrCode);
+      await navigator.clipboard.writeText(qrCode);
       setCopied(true);
       toast({
         description: "Chave PIX copiada com sucesso!",
@@ -95,13 +90,11 @@ export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
   const handleRefreshStatus = async () => {
     setIsChecking(true);
     try {
-      const response = await fetch(
-        `/api/orders/${searchParams.orderId}/status`
-      );
+      const response = await fetch(`/api/orders/${orderId}/status`);
       const data = await response.json();
 
       if (data.status === "paid") {
-        router.push(`/success?orderId=${searchParams.orderId}`);
+        router.push(`/success?orderId=${orderId}`);
       } else {
         toast({
           description: "Pagamento ainda não identificado",
@@ -127,7 +120,7 @@ export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
 
   // Calcula a porcentagem do tempo restante
   const timeProgress = (() => {
-    if (!searchParams.expiresAt) return 0;
+    if (!expiresAt) return 0;
     const total = 3600; // 1 hora em segundos
     return Math.max(0, Math.min(100, (timeLeft / total) * 100));
   })();
@@ -153,13 +146,15 @@ export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
         {/* QR Code */}
         <div className="space-y-4">
           <div className="bg-white p-4 rounded-lg border flex justify-center">
-            <Image
-              src={searchParams.qrCodeUrl}
-              alt="QR Code PIX"
-              width={200}
-              height={200}
-              className="mx-auto"
-            />
+            <div className="relative w-[200px] h-[200px]">
+              <Image
+                src={qrCodeUrl}
+                alt="QR Code PIX"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
           </div>
 
           {/* Código PIX */}
@@ -167,7 +162,7 @@ export default function ProcessingPage({ searchParams }: ProcessingPageProps) {
             <label className="text-sm font-medium">Código PIX</label>
             <div className="flex gap-2">
               <code className="flex-1 p-3 bg-muted rounded-lg text-xs break-all">
-                {searchParams.qrCode}
+                {qrCode}
               </code>
               <Button
                 variant="outline"
