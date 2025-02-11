@@ -169,6 +169,7 @@ export class PagarmeClient {
     customer: PagarmeCustomer;
     cardData: PagarmeCreditCardInput;
     metadata?: Record<string, unknown>;
+    installments?: number;
   }): Promise<PagarmeTransaction> {
     console.log("[Pagar.me] Iniciando pagamento com cartão");
 
@@ -186,7 +187,7 @@ export class PagarmeClient {
       payment: {
         payment_method: "credit_card",
         credit_card: {
-          installments: 1,
+          installments: params.installments || 1,
           statement_descriptor: "PAYSTEP",
           card: {
             number: params.cardData.number.replace(/\s/g, ""),

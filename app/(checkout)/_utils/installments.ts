@@ -1,34 +1,41 @@
 // app/(checkout)/_utils/installments.ts
 interface InstallmentOption {
-  number: number; // número de parcelas
-  amount: number; // valor da parcela
-  total: number; // valor total com juros
-  interestRate: number; // taxa de juros aplicada (1.67%)
+  number: number;
+  amount: number;
+  total: number;
+  interestRate: number;
 }
 
 export function calculateInstallments(basePrice: number): InstallmentOption[] {
-  const INTEREST_RATE = 1.67; // 1.67% ao mês
-  const MAX_INSTALLMENTS = 12;
+  const installmentOptions: InstallmentOption[] = [];
+  const BASE_INTEREST = 1.67; // 1.67% base
 
-  return Array.from({ length: MAX_INSTALLMENTS }, (_, i) => {
-    const installmentNumber = i + 1;
-    let total = basePrice;
-    let installmentAmount = basePrice;
-
-    // Se não for à vista, aplica juros
-    if (installmentNumber > 1) {
-      // Cálculo de juros compostos: M = P(1 + i)^n
-      // Onde: M = Montante, P = Principal, i = taxa de juros, n = número de períodos
-      const interest = INTEREST_RATE / 100;
-      total = basePrice * Math.pow(1 + interest, installmentNumber - 1);
-      installmentAmount = total / installmentNumber;
-    }
-
-    return {
-      number: installmentNumber,
-      amount: Math.ceil(installmentAmount * 100) / 100, // Arredonda para 2 casas decimais
-      total: Math.ceil(total * 100) / 100,
-      interestRate: installmentNumber === 1 ? 0 : INTEREST_RATE,
-    };
+  // Primeira opção - sem juros
+  installmentOptions.push({
+    number: 1,
+    amount: basePrice,
+    total: basePrice,
+    interestRate: 0,
   });
+
+  // Demais parcelas - com juros progressivos
+  for (let i = 2; i <= 12; i++) {
+    // Calcula o juros acumulado: parcela atual x 1.67%
+    const totalInterest = BASE_INTEREST * i;
+
+    // Calcula o valor total com juros
+    const totalWithInterest = basePrice * (1 + totalInterest / 100);
+
+    // Valor de cada parcela
+    const installmentAmount = totalWithInterest / i;
+
+    installmentOptions.push({
+      number: i,
+      amount: installmentAmount,
+      total: totalWithInterest,
+      interestRate: totalInterest,
+    });
+  }
+
+  return installmentOptions;
 }

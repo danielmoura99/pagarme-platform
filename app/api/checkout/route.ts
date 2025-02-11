@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
       const [expMonth, expYear] = cardData.cardExpiry.split("/");
       transaction = await pagarme.createCreditCardPayment({
-        amount: dbProduct.prices[0].amount,
+        amount: body.totalAmount || dbProduct.prices[0].amount,
         customer: pagarmeCustomer,
         cardData: {
           number: cardData.cardNumber.replace(/\D/g, ""),
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
           exp_year: parseInt(`20${expYear}`),
           cvv: cardData.cardCvv,
         },
+        installments: body.installments,
         metadata: {
           product_id: dbProduct.id,
         },
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
     } else {
       // Pagamento PIX
       transaction = await pagarme.createPixPayment({
-        amount: dbProduct.prices[0].amount,
+        amount: body.totalAmount || dbProduct.prices[0].amount,
         customer: pagarmeCustomer,
         expiresIn: 3600, // 1 hora
         metadata: {

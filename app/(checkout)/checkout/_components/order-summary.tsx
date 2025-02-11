@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+
 import { Loader2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -9,6 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { calculateInstallments } from "../../_utils/installments";
 
 interface OrderSummaryProps {
   product: {
@@ -19,11 +28,18 @@ interface OrderSummaryProps {
       amount: number;
     }>;
   };
+  onInstallmentChange?: (installments: number, totalAmount: number) => void;
+  paymentMethod: "credit_card" | "pix";
 }
 
-export function OrderSummary({ product }: OrderSummaryProps) {
+export function OrderSummary({
+  product,
+  onInstallmentChange,
+  paymentMethod,
+}: OrderSummaryProps) {
   const [couponCode, setCouponCode] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [selectedInstallment, setSelectedInstallment] = useState(1);
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
     discountPercentage: number;
@@ -36,11 +52,23 @@ export function OrderSummary({ product }: OrderSummaryProps) {
     : 0;
   const finalPrice = basePrice - discount;
 
+  // Calcula as opções de parcelamento com o preço após desconto
+  const installmentOptions = calculateInstallments(finalPrice / 100);
+  const selectedOption = installmentOptions[selectedInstallment - 1];
+
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
     }).format(amount / 100);
+  };
+
+  const handleInstallmentChange = (value: string) => {
+    const newInstallment = Number(value);
+    setSelectedInstallment(newInstallment);
+
+    const newOption = installmentOptions[newInstallment - 1];
+    onInstallmentChange?.(newInstallment, Math.round(newOption.total * 100));
   };
 
   const applyCoupon = async () => {
@@ -151,36 +179,99 @@ export function OrderSummary({ product }: OrderSummaryProps) {
           )}
         </div>
 
+        {/* Opções de Parcelamento */}
+        {paymentMethod === "credit_card" && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <label className="text-sm font-medium">
+                Opções de Parcelamento
+              </label>
+              <Select
+                value={String(selectedInstallment)}
+                onValueChange={handleInstallmentChange}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione o número de parcelas" />
+                </SelectTrigger>
+                <SelectContent>
+                  {installmentOptions.map((option) => (
+                    <SelectItem
+                      key={option.number}
+                      value={String(option.number)}
+                      className="flex justify-between"
+                    >
+                      <span>
+                        {option.number}x de {formatPrice(option.amount * 100)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/*{selectedInstallment > 1 && (
+            <div className="text-sm bg-muted/50 rounded p-2">
+              <p className="flex justify-between">
+                <span>Total parcelado:</span>
+                <span className="font-medium">
+                  {formatPrice(selectedOption.total * 100)}
+                </span>
+              </p>
+               <p className="text-xs text-muted-foreground mt-1">
+                Taxa de juros: {selectedOption.interestRate}% ao mês
+              </p>
+            </div>
+          )}*/}
+            </div>
+          </>
+        )}
         <Separator />
 
         {/* Valores */}
         <div className="space-y-4">
-          {appliedCoupon && (
+          {(appliedCoupon || selectedInstallment > 1) && (
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal:</span>
                 <span>{formatPrice(basePrice)}</span>
               </div>
-              <div className="flex justify-between text-green-600">
-                <span>Desconto ({appliedCoupon.discountPercentage}%):</span>
-                <span>-{formatPrice(discount)}</span>
-              </div>
+              {appliedCoupon && (
+                <div className="flex justify-between text-green-600">
+                  <span>Desconto ({appliedCoupon.discountPercentage}%):</span>
+                  <span>-{formatPrice(discount)}</span>
+                </div>
+              )}
+              {/*  {selectedInstallment > 1 && (
+                <div className="flex justify-between text-amber-600">
+                  <span>Juros ({selectedOption.interestRate}% a.m.):</span>
+                  <span>
+                    +{formatPrice(selectedOption.total * 100 - finalPrice)}
+                  </span>
+                </div>
+              )}*/}
             </div>
           )}
 
           <div className="flex justify-between items-center">
             <span className="text-lg font-medium">Total</span>
             <div className="text-right">
-              {appliedCoupon && (
+              {(appliedCoupon || selectedInstallment > 1) && (
                 <span className="text-sm text-muted-foreground line-through mr-2">
                   {formatPrice(basePrice)}
                 </span>
               )}
               <span className="text-2xl font-bold">
-                {formatPrice(finalPrice)}
+                {formatPrice(basePrice - discount)}
               </span>
             </div>
           </div>
+
+          {selectedInstallment > 1 && (
+            <p className="text-sm text-center text-muted-foreground">
+              Em {selectedInstallment}x de{" "}
+              {formatPrice(selectedOption.amount * 100)}
+            </p>
+          )}
         </div>
 
         {/* Informações de Segurança */}

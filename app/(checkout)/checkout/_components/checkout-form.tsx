@@ -98,9 +98,17 @@ interface CheckoutFormProps {
       [key: string]: any;
     }>;
   };
+  selectedInstallments?: number;
+  totalAmount?: number;
+  onPaymentMethodChange?: (method: "credit_card" | "pix") => void;
 }
 
-export function CheckoutForm({ product }: CheckoutFormProps) {
+export function CheckoutForm({
+  product,
+  selectedInstallments, // valor padrão de 1
+  totalAmount,
+  onPaymentMethodChange,
+}: CheckoutFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"credit_card" | "pix">(
@@ -128,6 +136,7 @@ export function CheckoutForm({ product }: CheckoutFormProps) {
     const method = value as "credit_card" | "pix";
     setPaymentMethod(method);
     form.setValue("paymentMethod", method);
+    onPaymentMethodChange?.(method);
 
     // Se mudar para PIX, limpa os campos do cartão
     if (method === "pix") {
@@ -190,6 +199,8 @@ export function CheckoutForm({ product }: CheckoutFormProps) {
           phone: data.phone,
         },
         paymentMethod,
+        installments: selectedInstallments,
+        totalAmount: totalAmount || product.prices[0].amount,
         // Se for cartão, incluir os dados
         ...(paymentMethod === "credit_card" && {
           cardData: {
