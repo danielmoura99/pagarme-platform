@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  role          String    @default("customer") // admin, affiliate, customer
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relacionamentos
+  affiliate     Affiliate?
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    
+  document  String    @unique  // Alterado para unique
+  phone     String?
+  orders    Order[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id            String    @id @default(cuid())
+  productId     Int       @default(autoincrement()) // autoincremental
+  name          String
+  description   String?
+  active        Boolean   @default(true)
+  prices        Price[]
+  orderItems    OrderItem[]
+  coupons       Coupon[]   // Nova relação
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Price {
+  id            String    @id @default(cuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+  amount        Int       // em centavos
+  currency      String    @default("BRL")
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Order {
+  id            String    @id @default(cuid())
+  customerId    String
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  status        String    // pending, paid, failed, refunded
+  amount        Int
+  items         OrderItem[]
+  paymentMethod String
+  installments  Int       @default(1)
+  affiliateId   String?
+  affiliate     Affiliate? @relation(fields: [affiliateId], references: [id])
+  couponId      String?   // Novo campo
+  coupon        Coupon?   @relation(fields: [couponId], references: [id]) // Nova relação
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model OrderItem {
+  id            String    @id @default(cuid())
+  orderId       String
+  order         Order     @relation(fields: [orderId], references: [id])
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id])
+  quantity      Int
+  price         Int       // Preço no momento da compra
+  createdAt     DateTime  @default(now())
+}
+
+model Affiliate {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  commission    Float     // Percentual de comissão
+  orders        Order[]
+  active        Boolean   @default(true)
+  bankInfo      Json?     // Informações bancárias
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Coupon {
+  id                String    @id @default(cuid())
+  code              String    @unique
+  active            Boolean   @default(true)
+  discountPercentage Int      // Valor entre 0 e 100
+  usageCount        Int      @default(0)
+  maxUses           Int?     // Null significa uso ilimitado
+  expiresAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  orders            Order[]   // Pedidos que usaram o cupom
+  products          Product[]  // Nova relação
+}
