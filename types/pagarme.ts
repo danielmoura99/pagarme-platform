@@ -139,3 +139,123 @@ export interface CardTokenResponse {
   last_four_digits: string;
   brand: string;
 }
+
+/////Interface para Afiliados/recebedores
+export interface BankAccount {
+  bank_code: string; // Código do banco
+  branch: string; // Agência
+  branch_check_digit?: string; // Dígito da agência (se houver)
+  account: string; // Número da conta
+  account_check_digit: string; // Dígito da conta
+  type: "checking" | "savings"; // Tipo de conta
+  holder_name: string; // Nome do titular
+  holder_type: "individual" | "corporation"; // Tipo do titular
+  holder_document: string; // CPF/CNPJ do titular
+}
+
+export interface Recipient {
+  name: string;
+  email: string;
+  description?: string;
+  document: string;
+  type: "individual" | "corporation";
+  default_bank_account: BankAccount;
+  transfer_settings?: {
+    transfer_enabled: boolean;
+    transfer_interval: "daily" | "weekly" | "monthly";
+    transfer_day: number;
+  };
+  automatic_anticipation_settings?: {
+    enabled: boolean;
+    type: "full" | "1025" | "minimum";
+    volume_percentage: number;
+    delay: number;
+  };
+}
+
+export interface RecipientResponse extends Recipient {
+  id: string;
+  code: string;
+  status: "active" | "inactive" | "suspended";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PhoneNumber {
+  ddd: string;
+  number: string;
+  type: "mobile" | "landline";
+}
+
+export interface Address {
+  street: string;
+  complementary?: string;
+  street_number: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  reference_point?: string;
+}
+
+export interface ManagingPartner {
+  name: string;
+  email: string;
+  document: string;
+  type: "individual" | "corporation";
+  mother_name: string;
+  birthdate: string;
+  monthly_income: number;
+  professional_occupation: string;
+  self_declared_legal_representative: boolean;
+  address: Address;
+  phone_numbers: PhoneNumber[];
+}
+
+export interface RegisterInformation {
+  company_name: string;
+  trading_name: string;
+  email: string;
+  document: string;
+  type: "individual" | "corporation";
+  site_url?: string;
+  annual_revenue: number;
+  corporation_type: string;
+  founding_date: string;
+  main_address: Address;
+  phone_numbers: PhoneNumber[];
+  managing_partners: ManagingPartner[];
+}
+
+export interface BankAccount {
+  holder_name: string;
+  holder_type: "individual" | "corporation";
+  holder_document: string;
+  bank: string;
+  branch_number: string;
+  branch_check_digit?: string;
+  account_number: string;
+  account_check_digit: string;
+  type: "checking" | "savings";
+}
+
+export interface TransferSettings {
+  transfer_enabled: boolean;
+  transfer_interval: "daily" | "weekly" | "monthly";
+  transfer_day: number;
+}
+
+export interface AutomaticAnticipationSettings {
+  enabled: boolean;
+  type: "full" | "1025" | "minimum";
+  volume_percentage: number;
+  delay: number | null;
+}
+
+export interface RecipientCreateRequest {
+  code: string;
+  register_information: RegisterInformation;
+  transfer_settings: TransferSettings;
+  default_bank_account: BankAccount;
+  automatic_anticipation_settings: AutomaticAnticipationSettings;
+}

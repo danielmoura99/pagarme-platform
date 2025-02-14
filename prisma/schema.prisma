@@ -43,6 +43,10 @@ model Product {
   coupons       Coupon[]   // Nova relação
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+    // Relação com Order Bumps
+  orderBumps      OrderBump[]  @relation("ProductOrderBumps")
+  orderBumpOf     OrderBump[]  @relation("OrderBumpProducts")
 }
 
 model Price {
@@ -71,6 +75,24 @@ model Order {
   coupon        Coupon?   @relation(fields: [couponId], references: [id]) // Nova relação
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+model OrderBump {
+  id          String   @id @default(cuid())
+  
+  // Produto principal
+  productId   String
+  product     Product  @relation("ProductOrderBumps", fields: [productId], references: [id])
+  
+  // Produto oferecido como bump
+  bumpProductId String
+  bumpProduct   Product @relation("OrderBumpProducts", fields: [bumpProductId], references: [id])
+  
+  // Configurações do bump
+  discount    Float?   // Desconto opcional para o bump
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model OrderItem {

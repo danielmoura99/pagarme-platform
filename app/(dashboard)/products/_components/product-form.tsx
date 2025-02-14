@@ -29,6 +29,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { createProduct, updateProduct } from "../_actions";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { OrderBumpSelect } from "./order-bump-select";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = [
@@ -70,15 +72,30 @@ const formSchema = z.object({
       })
     )
     .optional(),
+  orderBumps: z
+    .array(
+      z.object({
+        productId: z.string(),
+        discount: z.number().min(0).max(100).optional(),
+      })
+    )
+    .default([]),
 });
 
 type ProductFormValues = z.infer<typeof formSchema>;
 
 interface ProductFormProps {
   initialData?: ProductFormValues;
+  availableProducts?: Array<{
+    id: string;
+    name: string;
+  }>;
 }
 
-export const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
+export const ProductForm: React.FC<ProductFormProps> = ({
+  initialData,
+  availableProducts = [],
+}) => {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -206,6 +223,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
                   <TabsTrigger value="basic">Informações Básicas</TabsTrigger>
                   <TabsTrigger value="media">Mídia</TabsTrigger>
                   <TabsTrigger value="pricing">Preços</TabsTrigger>
+                  <TabsTrigger value="orderbumps">Order Bumps</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-4 space-y-4">
@@ -363,6 +381,34 @@ export const ProductForm: React.FC<ProductFormProps> = ({ initialData }) => {
                         </FormControl>
                         <FormDescription>
                           Preço principal do produto
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+
+                <TabsContent value="orderbumps" className="mt-4 space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="orderBumps"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Produtos Complementares (Order Bumps)
+                        </FormLabel>
+                        <OrderBumpSelect
+                          availableProducts={availableProducts.filter(
+                            (p) => p.id !== initialData?.id
+                          )}
+                          value={field.value}
+                          onChange={(newValue) => {
+                            field.onChange(newValue);
+                          }}
+                        />
+                        <FormDescription>
+                          Selecione os produtos que serão oferecidos como
+                          complemento e defina seus descontos
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

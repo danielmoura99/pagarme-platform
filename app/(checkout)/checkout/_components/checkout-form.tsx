@@ -101,6 +101,7 @@ interface CheckoutFormProps {
   selectedInstallments?: number;
   totalAmount?: number;
   onPaymentMethodChange?: (method: "credit_card" | "pix") => void;
+  selectedBumps?: string[];
 }
 
 export function CheckoutForm({
@@ -108,6 +109,7 @@ export function CheckoutForm({
   selectedInstallments, // valor padrão de 1
   totalAmount,
   onPaymentMethodChange,
+  selectedBumps = [],
 }: CheckoutFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -199,6 +201,7 @@ export function CheckoutForm({
           phone: data.phone,
         },
         paymentMethod,
+        selectedBumps,
         installments: selectedInstallments,
         totalAmount: totalAmount || product.prices[0].amount,
         // Se for cartão, incluir os dados

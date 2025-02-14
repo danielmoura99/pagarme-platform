@@ -5,6 +5,8 @@ import {
   PagarmeCustomer,
   PagarmePayment,
   PagarmeTransaction,
+  Recipient,
+  RecipientResponse,
 } from "@/types/pagarme";
 import crypto from "crypto";
 
@@ -239,6 +241,141 @@ export class PagarmeClient {
     });
 
     return isValid;
+  }
+
+  // Criar novo recebedor
+  async createRecipient(data: Recipient): Promise<RecipientResponse> {
+    try {
+      console.log(
+        "[Pagar.me] Creating recipient:",
+        JSON.stringify(data, null, 2)
+      );
+
+      const response = await fetch(`${PAGARME_API_URL}/recipients`, {
+        method: "POST",
+        headers: this.headers,
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await response.text();
+      console.log("[Pagar.me] Resposta bruta:", responseData);
+      console.log("[Pagar.me] Status da resposta:", response.status);
+      console.log(
+        "[Pagar.me] Headers:",
+        Object.fromEntries(response.headers.entries())
+      );
+
+      if (!response.ok) {
+        let errorMessage = "Failed to create recipient";
+        if (responseData) {
+          try {
+            const errorData = JSON.parse(responseData);
+            errorMessage = errorData.message || errorMessage;
+          } catch (e) {
+            console.error(
+              "[Pagar.me] Erro ao fazer parse da resposta de erro:",
+              responseData
+            );
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (!responseData) {
+        throw new Error("Empty response from Pagar.me");
+      }
+
+      return JSON.parse(responseData);
+    } catch (error) {
+      console.error("[Pagar.me] Erro ao criar recebedor:", error);
+      throw error;
+    }
+  }
+
+  // Listar recebedores
+  async listRecipients(params?: {
+    page?: number;
+    size?: number;
+    status?: "active" | "inactive" | "suspended";
+  }): Promise<{ data: RecipientResponse[] }> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append("page", params.page.toString());
+      if (params?.size) queryParams.append("size", params.size.toString());
+      if (params?.status) queryParams.append("status", params.status);
+
+      const response = await fetch(
+        `${PAGARME_API_URL}/recipients?${queryParams.toString()}`,
+        {
+          headers: this.headers,
+        }
+      );
+
+      const responseData = await response.text();
+      console.log("[Pagar.me] Resposta lista de recebedores:", responseData);
+
+      if (!response.ok) {
+        throw new Error("Failed to list recipients");
+      }
+
+      return JSON.parse(responseData);
+    } catch (error) {
+      console.error("[Pagar.me] Erro ao listar recebedores:", error);
+      throw error;
+    }
+  }
+
+  // Obter recebedor específico
+  async getRecipient(recipientId: string): Promise<RecipientResponse> {
+    try {
+      const response = await fetch(
+        `${PAGARME_API_URL}/recipients/${recipientId}`,
+        {
+          headers: this.headers,
+        }
+      );
+
+      const responseData = await response.text();
+      console.log("[Pagar.me] Resposta recebedor:", responseData);
+
+      if (!response.ok) {
+        throw new Error("Failed to get recipient");
+      }
+
+      return JSON.parse(responseData);
+    } catch (error) {
+      console.error("[Pagar.me] Erro ao buscar recebedor:", error);
+      throw error;
+    }
+  }
+
+  // Atualizar recebedor
+  async updateRecipient(
+    recipientId: string,
+    data: Partial<Recipient>
+  ): Promise<RecipientResponse> {
+    try {
+      const response = await fetch(
+        `${PAGARME_API_URL}/recipients/${recipientId}`,
+        {
+          method: "PUT",
+          headers: this.headers,
+          body: JSON.stringify(data),
+        }
+      );
+
+      const responseData = await response.text();
+      console.log("[Pagar.me] Resposta atualização:", responseData);
+
+      if (!response.ok) {
+        throw new Error("Failed to update recipient");
+      }
+
+      return JSON.parse(responseData);
+    } catch (error) {
+      console.error("[Pagar.me] Erro ao atualizar recebedor:", error);
+      throw error;
+    }
   }
 }
 

@@ -1,16 +1,18 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// app/(checkout)/checkout/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckoutForm } from "./_components/checkout-form";
 import { OrderSummary } from "./_components/order-summary";
+//import { OrderBumps } from "./_components/order-bumps"; // Novo componente
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // Hook para acessar searchParams
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const searchParams = useSearchParams();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedInstallments, setSelectedInstallments] = useState(1);
@@ -18,9 +20,10 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<"credit_card" | "pix">(
     "credit_card"
   );
+  const [selectedBumps, setSelectedBumps] = useState<string[]>([]);
 
   useEffect(() => {
-    const productId = searchParams.get("productId"); // Usando o método get para acessar o parâmetro
+    const productId = searchParams.get("productId");
 
     const fetchProduct = async () => {
       if (!productId) {
@@ -54,6 +57,30 @@ export default function CheckoutPage() {
     fetchProduct();
   }, [searchParams, router]);
 
+  // Handler para seleção de order bumps
+  const handleBumpSelection = (bumpId: string, isSelected: boolean) => {
+    setSelectedBumps((prev) =>
+      isSelected ? [...prev, bumpId] : prev.filter((id) => id !== bumpId)
+    );
+  };
+
+  // Recalcular valor total quando bumps forem selecionados
+  useEffect(() => {
+    if (product) {
+      let total = product.prices[0].amount;
+
+      // Adicionar valor dos bumps selecionados
+      selectedBumps.forEach((bumpId) => {
+        const bump = product.orderBumps?.find((b: any) => b.id === bumpId);
+        if (bump) {
+          total += bump.prices[0].amount;
+        }
+      });
+
+      setTotalAmount(total);
+    }
+  }, [product, selectedBumps]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -77,15 +104,14 @@ export default function CheckoutPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-7 order-2 lg:order-1">
-            <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>
-              <CheckoutForm
-                product={product}
-                selectedInstallments={selectedInstallments}
-                totalAmount={totalAmount}
-                onPaymentMethodChange={setPaymentMethod}
-              />
-            </Suspense>
+          <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
+            <CheckoutForm
+              product={product}
+              selectedInstallments={selectedInstallments}
+              totalAmount={totalAmount}
+              onPaymentMethodChange={setPaymentMethod}
+              selectedBumps={selectedBumps}
+            />
           </div>
 
           <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
@@ -97,6 +123,8 @@ export default function CheckoutPage() {
                   setSelectedInstallments(installments);
                   setTotalAmount(amount);
                 }}
+                selectedBumps={selectedBumps}
+                onBumpSelect={handleBumpSelection}
               />
             </Suspense>
           </div>

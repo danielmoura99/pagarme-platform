@@ -10,6 +10,10 @@ interface ProductFormValues {
   description: string;
   price: number;
   active: boolean;
+  orderBumps: Array<{
+    productId: string;
+    discount?: number;
+  }>;
 }
 
 export async function getProduct(
@@ -26,12 +30,15 @@ export async function getProduct(
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        orderBumps: {
+          include: {
+            bumpProduct: true,
+          },
+        },
       },
     });
 
-    if (!product) {
-      return undefined;
-    }
+    if (!product) return undefined;
 
     return {
       id: product.id,
@@ -39,6 +46,10 @@ export async function getProduct(
       description: product.description || "",
       price: product.prices[0]?.amount ? product.prices[0].amount / 100 : 0,
       active: product.active,
+      orderBumps: product.orderBumps.map((bump) => ({
+        productId: bump.bumpProductId,
+        discount: bump.discount || 0,
+      })),
     };
   } catch (error) {
     console.error("[GET_PRODUCT_ERROR]", error);
@@ -46,8 +57,7 @@ export async function getProduct(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function updateProduct(id: string, data: any) {
+export async function updateProduct(id: string, data: ProductFormValues) {
   try {
     // Primeiro, desativa os preços existentes
     await prisma.price.updateMany({
@@ -60,7 +70,7 @@ export async function updateProduct(id: string, data: any) {
       },
     });
 
-    // Atualiza o produto e cria novo preço
+    // Atualiza o produto, preços e order bumps
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -72,6 +82,13 @@ export async function updateProduct(id: string, data: any) {
             amount: data.price,
             active: true,
           },
+        },
+        orderBumps: {
+          deleteMany: {}, // Remove os order bumps existentes
+          create: data.orderBumps.map((bump) => ({
+            bumpProductId: bump.productId,
+            discount: bump.discount,
+          })),
         },
       },
     });
@@ -114,6 +131,12 @@ export async function createProduct(data: ProductFormValues) {
             amount: data.price,
             active: true,
           },
+        },
+        orderBumps: {
+          create: data.orderBumps.map((bump) => ({
+            bumpProductId: bump.productId,
+            discount: bump.discount,
+          })),
         },
       },
     });

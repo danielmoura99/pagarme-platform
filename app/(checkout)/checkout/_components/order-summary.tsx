@@ -1,8 +1,7 @@
-// app/(checkout)/checkout/_components/order-summary.tsx
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useState } from "react";
-
+import { useState, useEffect } from "react";
 import { Loader2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+
 import {
   Select,
   SelectContent,
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { calculateInstallments } from "../../_utils/installments";
 
 interface OrderSummaryProps {
@@ -27,15 +28,27 @@ interface OrderSummaryProps {
     prices: Array<{
       amount: number;
     }>;
+    orderBumps?: Array<{
+      id: string;
+      name: string;
+      description?: string | null;
+      prices: Array<{
+        amount: number;
+      }>;
+    }>;
   };
-  onInstallmentChange?: (installments: number, totalAmount: number) => void;
   paymentMethod: "credit_card" | "pix";
+  onInstallmentChange?: (installments: number, amount: number) => void;
+  selectedBumps?: string[];
+  onBumpSelect?: (bumpId: string, isSelected: boolean) => void;
 }
 
 export function OrderSummary({
   product,
   onInstallmentChange,
   paymentMethod,
+  selectedBumps = [],
+  onBumpSelect,
 }: OrderSummaryProps) {
   const [couponCode, setCouponCode] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -46,15 +59,46 @@ export function OrderSummary({
   } | null>(null);
   const { toast } = useToast();
 
-  const basePrice = product.prices[0]?.amount || 0;
-  const discount = appliedCoupon
-    ? Math.round((basePrice * appliedCoupon.discountPercentage) / 100)
-    : 0;
-  const finalPrice = basePrice - discount;
+  const calculateTotalWithBumps = () => {
+    let total = product.prices[0]?.amount || 0;
 
-  // Calcula as opções de parcelamento com o preço após desconto
+    if (selectedBumps && product.orderBumps) {
+      selectedBumps.forEach((bumpId) => {
+        const bump = product.orderBumps?.find((b) => b.id === bumpId);
+        if (bump?.prices[0]) {
+          total += bump.prices[0].amount;
+        }
+      });
+    }
+
+    return total;
+  };
+
+  // Calculamos o preço base total (com bumps e desconto)
+  const basePriceWithBumps = calculateTotalWithBumps();
+  const discount = appliedCoupon
+    ? Math.round((basePriceWithBumps * appliedCoupon.discountPercentage) / 100)
+    : 0;
+
+  // Este é o valor base para cálculo das parcelas (valor - desconto + bumps)
+  const finalPrice = basePriceWithBumps - discount;
+
+  // Calculamos as opções de parcelamento baseado no finalPrice
   const installmentOptions = calculateInstallments(finalPrice / 100);
   const selectedOption = installmentOptions[selectedInstallment - 1];
+
+  // Este é o valor que será enviado para processamento
+  const processingAmount =
+    paymentMethod === "pix" || selectedInstallment === 1
+      ? finalPrice
+      : Math.round(selectedOption.total * 100);
+
+  // Este é o valor que será exibido sempre (sem juros)
+  const displayPrice = finalPrice;
+
+  useEffect(() => {
+    onInstallmentChange?.(selectedInstallment, processingAmount);
+  }, [selectedInstallment, processingAmount, onInstallmentChange]);
 
   const formatPrice = (amount: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -66,9 +110,6 @@ export function OrderSummary({
   const handleInstallmentChange = (value: string) => {
     const newInstallment = Number(value);
     setSelectedInstallment(newInstallment);
-
-    const newOption = installmentOptions[newInstallment - 1];
-    onInstallmentChange?.(newInstallment, Math.round(newOption.total * 100));
   };
 
   const applyCoupon = async () => {
@@ -92,7 +133,6 @@ export function OrderSummary({
         title: "Cupom aplicado!",
         description: `Desconto de ${coupon.discountPercentage}% aplicado.`,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
         variant: "destructive",
@@ -119,7 +159,7 @@ export function OrderSummary({
         <CardTitle>Resumo do Pedido</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Produto */}
+        {/* Produto Principal */}
         <div className="space-y-4">
           <div className="flex justify-between">
             <div>
@@ -130,7 +170,9 @@ export function OrderSummary({
                 </p>
               )}
             </div>
-            <span className="font-medium">{formatPrice(basePrice)}</span>
+            <span className="font-medium">
+              {formatPrice(product.prices[0]?.amount || 0)}
+            </span>
           </div>
         </div>
 
@@ -179,6 +221,45 @@ export function OrderSummary({
           )}
         </div>
 
+        {/* Order Bumps */}
+        {product.orderBumps && product.orderBumps.length > 0 && (
+          <>
+            <Separator />
+            <div className="space-y-4">
+              <h4 className="text-sm font-medium">Produtos Complementares</h4>
+              {product.orderBumps.map((bump) => (
+                <div
+                  key={bump.id}
+                  className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                >
+                  <Checkbox
+                    id={`bump-${bump.id}`}
+                    checked={selectedBumps?.includes(bump.id)}
+                    onCheckedChange={(checked) => {
+                      if (onBumpSelect) {
+                        onBumpSelect(bump.id, checked === true);
+                      }
+                    }}
+                  />
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`bump-${bump.id}`}
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      {bump.name}
+                    </label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm font-medium">
+                        {formatPrice(bump.prices?.[0]?.amount || 0)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Opções de Parcelamento */}
         {paymentMethod === "credit_card" && (
           <>
@@ -208,32 +289,21 @@ export function OrderSummary({
                   ))}
                 </SelectContent>
               </Select>
-
-              {/*{selectedInstallment > 1 && (
-            <div className="text-sm bg-muted/50 rounded p-2">
-              <p className="flex justify-between">
-                <span>Total parcelado:</span>
-                <span className="font-medium">
-                  {formatPrice(selectedOption.total * 100)}
-                </span>
-              </p>
-               <p className="text-xs text-muted-foreground mt-1">
-                Taxa de juros: {selectedOption.interestRate}% ao mês
-              </p>
-            </div>
-          )}*/}
             </div>
           </>
         )}
+
         <Separator />
 
         {/* Valores */}
         <div className="space-y-4">
-          {(appliedCoupon || selectedInstallment > 1) && (
+          {(selectedBumps.length > 0 ||
+            appliedCoupon ||
+            selectedInstallment > 1) && (
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal:</span>
-                <span>{formatPrice(basePrice)}</span>
+                <span>{formatPrice(basePriceWithBumps)}</span>
               </div>
               {appliedCoupon && (
                 <div className="flex justify-between text-green-600">
@@ -241,14 +311,6 @@ export function OrderSummary({
                   <span>-{formatPrice(discount)}</span>
                 </div>
               )}
-              {/*  {selectedInstallment > 1 && (
-                <div className="flex justify-between text-amber-600">
-                  <span>Juros ({selectedOption.interestRate}% a.m.):</span>
-                  <span>
-                    +{formatPrice(selectedOption.total * 100 - finalPrice)}
-                  </span>
-                </div>
-              )}*/}
             </div>
           )}
 
@@ -257,11 +319,11 @@ export function OrderSummary({
             <div className="text-right">
               {(appliedCoupon || selectedInstallment > 1) && (
                 <span className="text-sm text-muted-foreground line-through mr-2">
-                  {formatPrice(basePrice)}
+                  {formatPrice(basePriceWithBumps)}
                 </span>
               )}
               <span className="text-2xl font-bold">
-                {formatPrice(basePrice - discount)}
+                {formatPrice(displayPrice)}
               </span>
             </div>
           </div>
