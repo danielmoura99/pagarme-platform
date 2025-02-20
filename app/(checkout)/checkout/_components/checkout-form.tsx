@@ -102,6 +102,7 @@ interface CheckoutFormProps {
   totalAmount?: number;
   onPaymentMethodChange?: (method: "credit_card" | "pix") => void;
   selectedBumps?: string[];
+  affiliateRef?: string | null;
 }
 
 export function CheckoutForm({
@@ -110,6 +111,7 @@ export function CheckoutForm({
   totalAmount,
   onPaymentMethodChange,
   selectedBumps = [],
+  affiliateRef,
 }: CheckoutFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -204,6 +206,7 @@ export function CheckoutForm({
         selectedBumps,
         installments: selectedInstallments,
         totalAmount: totalAmount || product.prices[0].amount,
+        affiliateRef,
         // Se for cartão, incluir os dados
         ...(paymentMethod === "credit_card" && {
           cardData: {

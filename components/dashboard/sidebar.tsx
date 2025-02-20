@@ -53,7 +53,7 @@ const data = {
     },
     {
       title: "Afiliados",
-      url: "/affiliates",
+      url: "/recipients",
       icon: UserCog,
     },
     {

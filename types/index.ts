@@ -20,6 +20,7 @@ export interface Customer {
 export interface Affiliate {
   id: string;
   userId: string;
+  recipientId: string | null;
   commission: number;
   active: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

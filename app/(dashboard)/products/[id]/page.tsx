@@ -6,13 +6,15 @@ import { getProduct } from "../_actions";
 export default async function EditProductPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  if (!params.id) {
+  const { id } = await params;
+
+  if (!id) {
     redirect("/products");
   }
 
-  const product = await getProduct(params.id);
+  const product = await getProduct(id);
 
   if (!product) {
     redirect("/products");

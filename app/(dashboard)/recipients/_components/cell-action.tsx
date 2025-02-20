@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Edit, MoreHorizontal, Trash } from "lucide-react";
+import { Edit, Link2, MoreHorizontal, Trash } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { RecipientColumn } from "./columns";
 import { useToast } from "@/hooks/use-toast";
+import GenerateLinkModal from "./generate-link-modal";
 
 interface CellActionProps {
   data: RecipientColumn;
@@ -26,28 +27,32 @@ export function CellAction({ data }: CellActionProps) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const onCopy = () => {
-    navigator.clipboard.writeText(data.id);
-    toast({
-      description: "ID do afiliado copiado!",
-    });
+  const onEdit = () => {
+    // Nova rota de edição
+    router.push(`/recipients/edit/${data.id}`);
   };
 
   const onDelete = async () => {
     try {
       setLoading(true);
-      await fetch(`/api/recipients/${data.id}`, {
+
+      const response = await fetch(`/api/recipients/${data.id}`, {
         method: "DELETE",
       });
+
+      if (!response.ok) {
+        throw new Error("Erro ao desativar recebedor");
+      }
+
       router.refresh();
       toast({
-        description: "Afiliado excluído com sucesso.",
+        description: "Afiliado desativado com sucesso.",
       });
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
         variant: "destructive",
-        description: "Erro ao excluir afiliado.",
+        description: "Erro ao desativar afiliado.",
       });
     } finally {
       setLoading(false);
@@ -72,16 +77,24 @@ export function CellAction({ data }: CellActionProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
-          <DropdownMenuItem onClick={onCopy}>
-            <Copy className="mr-2 h-4 w-4" /> Copiar ID
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => router.push(`/recipients/${data.id}`)}
-          >
+          <DropdownMenuItem onClick={onEdit}>
             <Edit className="mr-2 h-4 w-4" /> Editar
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setOpen(true)}>
-            <Trash className="mr-2 h-4 w-4" /> Excluir
+          <DropdownMenuItem asChild>
+            <GenerateLinkModal
+              affiliateId={data.id}
+              trigger={
+                <div className="flex items-center px-2 py-1.5 text-sm w-full">
+                  <Link2 className="mr-2 h-4 w-4" /> Gerar Link
+                </div>
+              }
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => setOpen(true)}
+            className="text-red-600 focus:text-red-600"
+          >
+            <Trash className="mr-2 h-4 w-4" /> Desativar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

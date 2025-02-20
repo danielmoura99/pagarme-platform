@@ -2,16 +2,18 @@
 import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
 import { prisma } from "@/lib/db";
+import { SplitRule } from "@/types/pagarme";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { product, customer, paymentMethod, cardData } = body;
+    const { product, customer, paymentMethod, cardData, affiliateRef } = body;
 
     console.log("Recebido request de checkout:", {
       product,
       customer,
       paymentMethod,
+      affiliateRef,
     });
 
     // 1. Validar e buscar produto
@@ -35,12 +37,67 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2. Formatar telefone
+    // 2. Verificar afiliado se existir
+    let splitRules: SplitRule[] | undefined;
+    if (affiliateRef && process.env.PAGARME_MAIN_RECIPIENT_ID) {
+      console.log("Buscando afiliado:", affiliateRef);
+      const affiliate = await prisma.affiliate.findFirst({
+        where: {
+          recipientId: affiliateRef,
+          active: true,
+        },
+        select: {
+          id: true,
+          commission: true,
+          recipientId: true,
+        },
+      });
+
+      console.log("Dados do afiliado encontrado:", affiliate);
+
+      if (affiliate?.recipientId) {
+        splitRules = [
+          {
+            amount: 100 - affiliate.commission,
+            recipient_id: process.env.PAGARME_MAIN_RECIPIENT_ID,
+            type: "percentage",
+            options: {
+              liable: true,
+              charge_processing_fee: true,
+              charge_remainder_fee: true,
+            },
+          },
+          {
+            amount: affiliate.commission,
+            recipient_id: affiliate.recipientId,
+            type: "percentage",
+            options: {
+              liable: false,
+              charge_processing_fee: false,
+              charge_remainder_fee: false,
+            },
+          },
+        ];
+
+        console.log(
+          "Regras de split configuradas:",
+          JSON.stringify(splitRules, null, 2)
+        );
+      } else {
+        console.log("Afiliado encontrado mas sem recipientId válido");
+      }
+    } else {
+      console.log(
+        "Sem affiliateRef ou PAGARME_MAIN_RECIPIENT_ID não configurado"
+      );
+    }
+
+    // 3. Formatar telefone
     const [areaCode, ...phoneNumber] = customer.phone
       .replace(/\D/g, "")
       .split("");
 
-    // 3. Preparar customer para Pagar.me
+    // 4. Preparar customer para Pagar.me
     const pagarmeCustomer = {
       name: customer.name,
       email: customer.email,
@@ -55,8 +112,14 @@ export async function POST(request: Request) {
       },
     };
 
-    // 4. Criar transação na Pagar.me
+    // 5. Criar transação na Pagar.me
     let transaction;
+    const amount = body.totalAmount || dbProduct.prices[0].amount;
+    const metadata = {
+      product_id: dbProduct.id,
+      affiliate_id: affiliateRef || null,
+    };
+
     if (paymentMethod === "credit_card") {
       if (!cardData) {
         return NextResponse.json(
@@ -68,10 +131,20 @@ export async function POST(request: Request) {
         );
       }
 
+      console.log("Criando transação com split:", {
+        amount,
+        splitRules,
+        mainRecipientId: process.env.PAGARME_MAIN_RECIPIENT_ID,
+      });
+
       const [expMonth, expYear] = cardData.cardExpiry.split("/");
       transaction = await pagarme.createCreditCardPayment({
-        amount: body.totalAmount || dbProduct.prices[0].amount,
+        amount,
         customer: pagarmeCustomer,
+        productDetails: {
+          name: dbProduct.name, // Adicionando nome do produto
+          description: dbProduct.description || undefined, // Adicionando descrição se existir
+        },
         cardData: {
           number: cardData.cardNumber.replace(/\D/g, ""),
           holder_name: cardData.cardHolder,
@@ -81,18 +154,27 @@ export async function POST(request: Request) {
         },
         installments: body.installments,
         metadata: {
-          product_id: dbProduct.id,
+          ...metadata,
+          product_name: dbProduct.name, // Adicionar ao metadata também
+          product_description: dbProduct.description,
         },
+        split: splitRules,
       });
     } else {
-      // Pagamento PIX
       transaction = await pagarme.createPixPayment({
-        amount: body.totalAmount || dbProduct.prices[0].amount,
+        amount,
         customer: pagarmeCustomer,
-        expiresIn: 3600, // 1 hora
-        metadata: {
-          product_id: dbProduct.id,
+        productDetails: {
+          name: dbProduct.name, // Adicionando nome do produto
+          description: dbProduct.description || undefined,
         },
+        expiresIn: 3600,
+        metadata: {
+          ...metadata,
+          product_name: dbProduct.name,
+          product_description: dbProduct.description,
+        },
+        split: splitRules,
       });
     }
 
@@ -101,90 +183,100 @@ export async function POST(request: Request) {
       status: transaction.status,
     });
 
-    try {
-      // 5. Criar ou atualizar customer
-      console.log("[API] Processando customer...");
-      const formattedDocument = customer.document.replace(/\D/g, "");
+    // 6. Criar ou atualizar customer
+    console.log("[API] Processando customer...");
+    const formattedDocument = customer.document.replace(/\D/g, "");
 
-      const dbCustomer = await prisma.customer.upsert({
-        where: {
-          document: formattedDocument, // Agora usando apenas document
-        },
-        update: {
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone,
-        },
+    const dbCustomer = await prisma.customer.upsert({
+      where: {
+        document: formattedDocument,
+      },
+      update: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+      create: {
+        name: customer.name,
+        email: customer.email,
+        document: formattedDocument,
+        phone: customer.phone,
+      },
+    });
+
+    // 7. Criar pedido
+    const orderData = {
+      customerId: dbCustomer.id,
+      status: transaction.status,
+      amount,
+      paymentMethod,
+      items: {
         create: {
-          name: customer.name,
-          email: customer.email,
-          document: formattedDocument,
-          phone: customer.phone,
+          productId: dbProduct.id,
+          quantity: 1,
+          price: amount,
+        },
+      },
+    };
+
+    // Se tiver afiliado, buscar o ID interno
+    if (affiliateRef && splitRules?.[1]) {
+      // Usar o affiliate que já buscamos anteriormente
+      const affiliate = await prisma.affiliate.findFirst({
+        where: {
+          recipientId: affiliateRef,
+          active: true,
+        },
+        select: {
+          id: true, // Pegamos o ID interno do afiliado
         },
       });
 
-      console.log("[API] Customer processado:", {
-        id: dbCustomer.id,
-        document: dbCustomer.document,
-      });
-
-      // 6. Criar pedido
-      console.log("[API] Criando order...");
-      const order = await prisma.order.create({
-        data: {
-          customerId: dbCustomer.id,
-          status: transaction.status,
-          amount: dbProduct.prices[0].amount,
-          paymentMethod,
-          items: {
-            create: {
-              productId: dbProduct.id,
-              quantity: 1,
-              price: dbProduct.prices[0].amount,
-            },
-          },
-        },
-      });
-
-      console.log("[API] Order criada:", {
-        id: order.id,
-        status: order.status,
-      });
-
-      // 7. Retornar resposta
-      if (paymentMethod === "pix") {
-        const pixData = transaction.charges?.[0]?.last_transaction;
-
-        if (!pixData?.qr_code || !pixData?.qr_code_url) {
-          throw new Error("QR Code PIX não gerado");
-        }
-
-        return NextResponse.json({
-          success: true,
-          orderId: order.id,
-          qrCode: pixData.qr_code, // Código para copiar e colar
-          qrCodeUrl: pixData.qr_code_url, // URL da imagem do QR Code
-          expiresAt: pixData.expires_at,
-          status: transaction.status,
-          transactionId: transaction.id,
+      if (affiliate) {
+        Object.assign(orderData, {
+          affiliateId: affiliate.id, // Usar o ID interno do afiliado, não o recipientId
+          splitAmount: (splitRules[1].amount / 100) * amount,
         });
+      } else {
+        console.warn(
+          "[API] Afiliado não encontrado para recipientId:",
+          affiliateRef
+        );
+      }
+    }
+
+    // Log para debug
+    console.log("Dados do pedido a ser criado:", orderData);
+
+    // Criar o pedido
+    const order = await prisma.order.create({
+      data: orderData,
+    });
+
+    // 8. Retornar resposta apropriada
+    if (paymentMethod === "pix") {
+      const pixData = transaction.charges?.[0]?.last_transaction;
+
+      if (!pixData?.qr_code || !pixData?.qr_code_url) {
+        throw new Error("QR Code PIX não gerado");
       }
 
       return NextResponse.json({
         success: true,
         orderId: order.id,
+        qrCode: pixData.qr_code,
+        qrCodeUrl: pixData.qr_code_url,
+        expiresAt: pixData.expires_at,
         status: transaction.status,
+        transactionId: transaction.id,
       });
-    } catch (dbError) {
-      console.error("[API] Erro ao salvar no banco:", dbError);
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Erro ao salvar os dados da transação",
-        },
-        { status: 500 }
-      );
     }
+
+    return NextResponse.json({
+      success: true,
+      orderId: order.id,
+      status: transaction.status,
+    });
   } catch (error) {
     console.error("[API] Erro geral:", error);
     return NextResponse.json(

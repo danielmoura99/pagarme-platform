@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { CouponForm } from "../_components/coupon-form";
 
 interface PageProps {
-  params: { couponId: string };
+  params: Promise<{ couponId: string }>;
 }
 
 async function getCouponData(id: string) {

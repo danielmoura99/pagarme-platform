@@ -17,7 +17,7 @@ export default function AuthLayout({
 
         <div className="mt-auto">
           <p className="text-sm opacity-70">
-            © 2024 Sua Empresa. Todos os direitos reservados.
+            © 2024 PayStep. Todos os direitos reservados.
           </p>
         </div>
       </div>

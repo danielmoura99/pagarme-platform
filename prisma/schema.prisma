@@ -75,6 +75,7 @@ model Order {
   coupon        Coupon?   @relation(fields: [couponId], references: [id]) // Nova relação
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  splitAmount   Float?    // Valor da comissão calculada
 }
 
 model OrderBump {
@@ -110,6 +111,7 @@ model Affiliate {
   id            String    @id @default(cuid())
   userId        String    @unique
   user          User      @relation(fields: [userId], references: [id])
+  recipientId   String?   @unique
   commission    Float     // Percentual de comissão
   orders        Order[]
   active        Boolean   @default(true)

@@ -1,26 +1,25 @@
-// app/(dashboard)/recipients/[recipientId]/page.tsx
+// app/(dashboard)/recipients/edit/[recipientId]/page.tsx
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { pagarme } from "@/lib/pagarme";
-import { RecipientForm } from "../_components/recipient-form";
+import { RecipientForm } from "../../_components/recipient-form";
 
-interface PageProps {
+interface EditRecipientPageProps {
   params: Promise<{ recipientId: string }>;
 }
 
-function ensureRecipientType(type: string): "individual" | "corporation" {
-  return type === "individual" ? "individual" : "corporation";
-}
-
-async function getRecipientData(recipientId: string) {
+async function getRecipientData(id: string) {
   try {
+    console.log("Buscando dados do recipient:", id);
+
+    // Buscar dados do Pagar.me e do nosso banco em paralelo
     const [pagarmeRecipient, affiliate] = await Promise.all([
-      pagarme.getRecipient(recipientId),
+      pagarme.getRecipient(id),
       prisma.affiliate.findFirst({
         where: {
           bankInfo: {
-            path: ["recipientId"],
-            equals: recipientId,
+            path: ["recipient_id"],
+            equals: id,
           },
         },
         include: {
@@ -29,22 +28,29 @@ async function getRecipientData(recipientId: string) {
       }),
     ]);
 
+    console.log("Dados do Pagar.me:", pagarmeRecipient);
+    console.log("Dados do Affiliate:", affiliate);
+
     if (!pagarmeRecipient || !affiliate) {
+      console.log("Dados não encontrados");
       return null;
     }
 
-    // Garantindo que o tipo está correto
-    const type = ensureRecipientType(pagarmeRecipient.type);
-
+    // Formatar os dados para o formulário
     return {
-      id: recipientId,
+      id,
       // Dados da empresa
       company_name: pagarmeRecipient.name || "",
-      trading_name: pagarmeRecipient.name || "",
+      trading_name:
+        pagarmeRecipient.register_information?.trading_name ||
+        pagarmeRecipient.name ||
+        "",
       email: pagarmeRecipient.email || "",
       document: pagarmeRecipient.document || "",
-      type,
-      //annual_revenue: pagarmeRecipient.annual_revenue || 0,
+      type:
+        pagarmeRecipient.type === "individual" ? "individual" : "corporation",
+      annual_revenue:
+        Number(pagarmeRecipient.register_information?.annual_revenue) || 0,
 
       // Dados bancários
       bank_holder_name:
@@ -64,38 +70,45 @@ async function getRecipientData(recipientId: string) {
       // Configurações de transferência
       transfer_enabled:
         pagarmeRecipient.transfer_settings?.transfer_enabled || false,
-      transfer_interval: (pagarmeRecipient.transfer_settings
-        ?.transfer_interval || "monthly") as "daily" | "weekly" | "monthly",
+      transfer_interval:
+        (pagarmeRecipient.transfer_settings?.transfer_interval?.toLowerCase() ||
+          "monthly") as "daily" | "weekly" | "monthly",
       transfer_day: pagarmeRecipient.transfer_settings?.transfer_day || 1,
 
       // Dados do nosso sistema
       commission: affiliate.commission || 10,
       active: affiliate.active,
 
-      // Campos com valores fixos
-      bank_holder_type: "individual" as const,
-      partner_type: "individual" as const,
+      // Campos fixos
       phone_type: "mobile" as const,
+      partner_type: "individual" as const,
+      bank_holder_type: "individual" as const,
       anticipation_type: "full" as const,
       partner_self_declared: true,
-    };
+    } as const;
   } catch (error) {
-    console.error("[GET_RECIPIENT_ERROR]", error);
+    console.error("[GET_RECIPIENT_DATA_ERROR]", error);
     return null;
   }
 }
 
-export default async function EditRecipientPage({ params }: PageProps) {
-  const resolvedParams = await params;
-  const data = await getRecipientData(resolvedParams.recipientId);
+export default async function EditRecipientPage(props: EditRecipientPageProps) {
+  const params = await props.params;
+  if (!params.recipientId) {
+    notFound();
+  }
+
+  const data = await getRecipientData(params.recipientId);
 
   if (!data) {
-    notFound();
+    return notFound();
   }
 
   return (
     <div className="container mx-auto py-8">
-      <RecipientForm initialData={data} />
+      <div className="max-w-5xl mx-auto">
+        <RecipientForm initialData={data} mode="edit" />
+      </div>
     </div>
   );
 }

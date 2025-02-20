@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { columns } from "./columns";
+import { columns, RecipientColumn } from "./columns";
 
 export interface RecipientData {
   id: string;
@@ -20,7 +20,7 @@ export interface RecipientData {
 }
 
 interface RecipientClientProps {
-  data: RecipientData[];
+  data: RecipientColumn[]; // Usar o tipo RecipientColumn
 }
 
 export function RecipientClient({ data }: RecipientClientProps) {

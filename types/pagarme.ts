@@ -65,6 +65,7 @@ export interface PagarmePixInfo {
     name: string;
     value: string;
   }>;
+  split?: SplitRule[];
 }
 
 export interface PagarmeCreditCardPayload {
@@ -84,6 +85,7 @@ export interface PagarmePayment {
   payment_method: PaymentMethod;
   credit_card?: PagarmeCreditCardPayload;
   pix?: PagarmePixInfo;
+  split?: SplitRule[];
 }
 
 export interface PagarmeTransaction {
@@ -159,6 +161,7 @@ export interface Recipient {
   description?: string;
   document: string;
   type: "individual" | "corporation";
+  status?: "active" | "inactive" | "suspended"; // Adicionando status
   default_bank_account: BankAccount;
   transfer_settings?: {
     transfer_enabled: boolean;
@@ -171,16 +174,46 @@ export interface Recipient {
     volume_percentage: number;
     delay: number;
   };
+  metadata?: {
+    affiliateId?: string; // Para referência ao nosso sistema
+  };
 }
 
-export interface RecipientResponse extends Recipient {
+export interface RecipientResponse {
   id: string;
   code: string;
+  name: string;
+  email: string;
+  description?: string;
+  document: string;
+  type: "individual" | "corporation";
   status: "active" | "inactive" | "suspended";
   created_at: string;
   updated_at: string;
+  default_bank_account: BankAccount;
+  transfer_settings?: {
+    transfer_enabled: boolean;
+    transfer_interval: "daily" | "weekly" | "monthly";
+    transfer_day: number;
+  };
+  automatic_anticipation_settings?: {
+    enabled: boolean;
+    type: "full" | "1025" | "minimum";
+    volume_percentage: number;
+    delay: number;
+  };
+  register_information: RegisterInformation;
+  gateway_recipients?: Array<{
+    gateway: string;
+    status: string;
+    pgid: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  metadata?: {
+    affiliateId?: string;
+  };
 }
-
 export interface PhoneNumber {
   ddd: string;
   number: string;
@@ -212,19 +245,36 @@ export interface ManagingPartner {
   phone_numbers: PhoneNumber[];
 }
 
-export interface RegisterInformation {
-  company_name: string;
-  trading_name: string;
+interface RegisterInformation {
   email: string;
   document: string;
   type: "individual" | "corporation";
-  site_url?: string;
-  annual_revenue: number;
-  corporation_type: string;
-  founding_date: string;
-  main_address: Address;
-  phone_numbers: PhoneNumber[];
-  managing_partners: ManagingPartner[];
+  phone_numbers: Array<{
+    ddd: string;
+    number: string;
+    type: string;
+  }>;
+  company_name?: string;
+  trading_name?: string;
+  annual_revenue?: string;
+  main_address?: {
+    street: string;
+    complementary?: string;
+    street_number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    reference_point?: string;
+  };
+  managing_partners?: Array<{
+    name: string;
+    email: string;
+    document: string;
+    type: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  }>;
 }
 
 export interface BankAccount {
@@ -258,4 +308,77 @@ export interface RecipientCreateRequest {
   transfer_settings: TransferSettings;
   default_bank_account: BankAccount;
   automatic_anticipation_settings: AutomaticAnticipationSettings;
+}
+
+export interface SplitRule {
+  type: "percentage";
+  amount: number;
+  recipient_id: string;
+  options: {
+    liable: boolean;
+    charge_processing_fee: boolean;
+    charge_remainder_fee: boolean;
+  };
+}
+
+export interface PagarmePaymentWithSplit extends PagarmePayment {
+  split?: SplitRule[];
+}
+
+export interface PagarmeCreateTransactionOptions {
+  amount: number;
+  customer: PagarmeCustomer;
+  cardData?: PagarmeCreditCardInput;
+  metadata?: Record<string, unknown>;
+  installments?: number;
+  split?: SplitRule[];
+  productDetails?: ProductDetails;
+}
+
+export interface ProductDetails {
+  name: string;
+  description?: string;
+}
+
+export interface CreditCardPaymentOptions {
+  amount: number;
+  customer: PagarmeCustomer;
+  cardData: PagarmeCreditCardInput;
+  metadata?: Record<string, unknown>;
+  installments?: number;
+  split?: SplitRule[];
+  productDetails?: ProductDetails;
+}
+
+export interface PixPaymentOptions {
+  amount: number;
+  customer: PagarmeCustomer;
+  expiresIn?: number;
+  metadata?: Record<string, unknown>;
+  split?: SplitRule[];
+  productDetails?: ProductDetails;
+}
+
+export interface AffiliateBankInfo {
+  recipientId: string; // ID do recebedor na Pagar.me
+  bank_code: string;
+  branch: string;
+  account: string;
+  account_type: "checking" | "savings";
+  holder_name: string;
+  holder_document: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SplitConfig {
+  rules: SplitRule[];
+  amount: number;
+  recipient_id: string;
+}
+
+export interface SplitResponse {
+  id: string;
+  amount: number;
+  status: string;
+  recipient_id: string;
 }

@@ -6,28 +6,26 @@ import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// app/(dashboard)/products/edit/[id]/page.tsx
 export default async function EditProductPage({
   params,
 }: {
-  params: Promise<{ id: string }> | { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const resolvedParams = await params;
+  // Caso receba um objeto simples, pode fazer:
+  const resolvedParams = await Promise.resolve(params);
+  const { id } = resolvedParams;
 
-  if (!resolvedParams || typeof resolvedParams !== "object") {
+  if (!id) {
     redirect("/products");
   }
 
-  const { id } = resolvedParams;
-
   try {
-    // Buscar o produto e a lista de produtos disponíveis
     const [product, availableProducts] = await Promise.all([
       getProduct(id),
       prisma.product.findMany({
         where: {
           active: true,
-          id: { not: id }, // Excluir o produto atual
+          id: { not: id },
         },
         select: {
           id: true,
@@ -46,7 +44,7 @@ export default async function EditProductPage({
     const initialData = {
       ...product,
       price: product.price,
-      orderBumps: product.orderBumps || [], // Garantir que orderBumps exista
+      orderBumps: product.orderBumps || [],
     };
 
     return (

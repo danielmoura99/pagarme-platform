@@ -3,13 +3,17 @@ import { XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-export default function ErrorPage({
-  searchParams,
-}: {
-  searchParams: { error?: string };
-}) {
+// Usando a interface correta do Next.js
+interface Props {
+  params: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+export default async function ErrorPage({ searchParams }: Props) {
+  const resolvedSearchParams = await searchParams;
   const errorMessage =
-    searchParams.error || "Ocorreu um erro ao processar seu pagamento.";
+    typeof resolvedSearchParams.error === "string"
+      ? resolvedSearchParams.error
+      : "Ocorreu um erro ao processar seu pagamento.";
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">

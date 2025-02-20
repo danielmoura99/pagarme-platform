@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ orderId: string }> | { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
     // Aguardar a resolução dos parâmetros

@@ -6,7 +6,7 @@ export default withAuth(
   async function middleware(req) {
     // Se o usuário está autenticado e tenta acessar /login
     if (req.nextUrl.pathname === "/login" && req.nextauth.token) {
-      return NextResponse.redirect(new URL("/", req.url));
+      return NextResponse.redirect(new URL("/products", req.url));
     }
 
     return NextResponse.next();

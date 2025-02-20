@@ -3,7 +3,15 @@ import { CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-export default function SuccessPage({}: { searchParams: { orderId: string } }) {
+export default async function SuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ orderId: string }>;
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const resolvedSearchParams = await searchParams;
+  // Você pode usar resolvedSearchParams.orderId se precisar
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
@@ -24,19 +32,19 @@ export default function SuccessPage({}: { searchParams: { orderId: string } }) {
           <div className="p-4 bg-gray-50 rounded-lg">
             <h2 className="font-medium text-gray-900">Próximos passos:</h2>
             <ul className="mt-2 text-sm text-gray-500 text-left space-y-2">
-              <li>• Você receberá um email com os detalhes do pedido</li>
-              <li>• Acesse sua área do cliente para ver o produto</li>
+              <li>• Você receberá um email para completar o cadastro</li>
+              <li>• Preencha o formulário do email</li>
               <li>• Em caso de dúvidas, entre em contato com o suporte</li>
             </ul>
           </div>
 
           <div className="flex flex-col gap-2">
-            <Link href="/products">
+            <Link href="https://tradershouse.com.br/mesaproprietaria/">
               <Button className="w-full">Ver mais produtos</Button>
             </Link>
-            <Link href="/customer/orders">
+            <Link href="https://api.whatsapp.com/send?phone=5562993776216">
               <Button variant="outline" className="w-full">
-                Ver meus pedidos
+                Falar com Suporte
               </Button>
             </Link>
           </div>

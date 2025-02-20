@@ -8,17 +8,10 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
-import { columns } from "./columns";
+import { columns, ProductColumn } from "./columns";
 
 interface ProductClientProps {
-  data: {
-    id: string;
-    name: string;
-    description: string | null;
-    price: number;
-    active: boolean;
-    createdAt: string;
-  }[];
+  data: ProductColumn[]; // Usando o tipo importado
 }
 
 export function ProductClient({ data }: ProductClientProps) {

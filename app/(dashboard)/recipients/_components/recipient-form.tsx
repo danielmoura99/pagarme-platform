@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save } from "lucide-react";
+import { ArrowLeft, Loader2, Save } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -36,7 +36,7 @@ const formSchema = z
     trading_name: z.string().optional(),
     email: z.string().email("Email inválido").optional(),
     document: z.string().optional(),
-    type: z.literal("corporation").optional(),
+    type: z.enum(["corporation", "individual"]).optional(),
     annual_revenue: z.coerce.number().optional(),
 
     // Endereço principal
@@ -62,7 +62,7 @@ const formSchema = z
     partner_birthdate: z.string().optional(),
     partner_monthly_income: z.coerce.number().optional(),
     partner_occupation: z.string().optional(),
-    partner_self_declared: z.literal(true).optional(),
+    partner_self_declared: z.boolean().optional(),
 
     // Endereço do Sócio
     partner_street: z.string().optional(),
@@ -108,16 +108,34 @@ type RecipientFormValues = z.infer<typeof formSchema>;
 
 interface RecipientFormData extends z.infer<typeof formSchema> {
   id?: string;
+  // Informações básicas da empresa
+  company_name?: string;
+  trading_name?: string;
+  email?: string;
+  document?: string;
+  type?: "corporation" | "individual"; // Atualizado para aceitar ambos os tipos
+  annual_revenue?: number;
 }
 
 interface RecipientFormProps {
   initialData?: RecipientFormData;
+  mode?: "create" | "edit";
 }
 
-export function RecipientForm({ initialData }: RecipientFormProps) {
+export function RecipientForm({
+  initialData,
+  mode = "create",
+}: RecipientFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+
+  const title = mode === "edit" ? "Editar Recebedor" : "Novo Recebedor";
+  const description =
+    mode === "edit"
+      ? "Atualize as informações do recebedor"
+      : "Adicione um novo recebedor ao sistema";
+  const actionText = mode === "edit" ? "Salvar Alterações" : "Criar Recebedor";
 
   const form = useForm<RecipientFormValues>({
     resolver: zodResolver(formSchema),
@@ -243,7 +261,7 @@ export function RecipientForm({ initialData }: RecipientFormProps) {
 
       // Formatando os dados para o formato esperado pela Pagar.me
       const payload = {
-        code: "1234",
+        code: initialData?.id || "1234", // Usa ID existente ou gera novo
         register_information: {
           company_name: data.company_name,
           trading_name: data.trading_name,
@@ -303,7 +321,6 @@ export function RecipientForm({ initialData }: RecipientFormProps) {
           transfer_interval: data.transfer_interval,
           transfer_day: data.transfer_day,
         },
-
         default_bank_account: {
           holder_name: data.bank_holder_name,
           holder_type: "individual",
@@ -315,29 +332,31 @@ export function RecipientForm({ initialData }: RecipientFormProps) {
           account_check_digit: data.bank_account_digit,
           type: data.bank_account_type,
         },
-
-        automatic_anticipation_settings: {
-          enabled: data.anticipation_enabled,
-          type: data.anticipation_type,
-          volume_percentage: data.anticipation_volume_percentage,
-          delay: data.anticipation_delay,
+        metadata: {
+          commission: data.commission,
         },
-        // Opcional: outros dados que precisamos enviar para nossa API
-        commission: data.commission,
       };
-      const response = await fetch("/api/recipients", {
-        method: "POST",
+
+      // Determina se é criação ou atualização
+      const isUpdate = !!initialData?.id;
+      const url = isUpdate
+        ? `/api/recipients/${initialData.id}`
+        : "/api/recipients";
+
+      const method = isUpdate ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...payload,
-          commission: data.commission, // Adicionando nossa informação interna
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error("Erro ao criar recebedor");
+        throw new Error(
+          `Erro ao ${isUpdate ? "atualizar" : "criar"} recebedor`
+        );
       }
 
       router.push("/recipients");
@@ -345,14 +364,18 @@ export function RecipientForm({ initialData }: RecipientFormProps) {
 
       toast({
         title: "Sucesso!",
-        description: "Recebedor criado com sucesso.",
+        description: `Recebedor ${
+          isUpdate ? "atualizado" : "criado"
+        } com sucesso.`,
       });
     } catch (error) {
-      console.error("Erro ao criar recebedor:", error);
+      console.error("Erro:", error);
       toast({
         variant: "destructive",
         title: "Erro!",
-        description: "Não foi possível criar o recebedor.",
+        description: `Não foi possível ${
+          initialData?.id ? "atualizar" : "criar"
+        } o recebedor.`,
       });
     } finally {
       setLoading(false);
@@ -361,6 +384,20 @@ export function RecipientForm({ initialData }: RecipientFormProps) {
 
   return (
     <Form {...form}>
+      <div className="flex items-center gap-4 mb-4">
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="flex items-center"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <p className="text-sm text-muted-foreground">{description}</p>
+        </div>
+      </div>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <div className="grid gap-8">
           {/* Informações da Empresa */}
@@ -1322,7 +1359,7 @@ export function RecipientForm({ initialData }: RecipientFormProps) {
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                Salvar
+                {actionText}
               </>
             )}
           </Button>

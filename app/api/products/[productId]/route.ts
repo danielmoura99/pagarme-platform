@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   req: Request,
-  { params }: { params: Promise<{ productId: string }> | { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
     const resolvedParams = await params;
@@ -60,15 +60,16 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { productId: string } }
+  { params }: { params: Promise<{ productId: string }> }
 ) {
   try {
+    const resolvedParams = await params;
     const body = await req.json();
     const { orderBumps, ...data } = body;
 
     const product = await prisma.product.update({
       where: {
-        id: params.productId,
+        id: resolvedParams.productId,
       },
       data: {
         ...data,

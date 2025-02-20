@@ -1,12 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // lib/pagarme.ts
 import {
+  CreditCardPaymentOptions,
   PagarmeCreditCardInput,
   PagarmeCustomer,
   PagarmePayment,
   PagarmeTransaction,
+  PixPaymentOptions,
   Recipient,
   RecipientResponse,
+  SplitRule,
 } from "@/types/pagarme";
 import crypto from "crypto";
 
@@ -38,20 +41,53 @@ export class PagarmeClient {
     customer: PagarmeCustomer;
     payment: PagarmePayment;
     metadata?: Record<string, unknown>;
+    split?: SplitRule[];
+    productDetails?: {
+      name: string;
+      description?: string;
+    };
   }): Promise<PagarmeTransaction> {
     try {
+      // Log das regras de split
+      if (params.split) {
+        console.log(
+          "[Pagar.me] Regras de split:",
+          JSON.stringify(params.split, null, 2)
+        );
+        const totalAmount = params.split.reduce(
+          (sum, rule) => sum + rule.amount,
+          0
+        );
+        console.log("[Pagar.me] Total do amount de split:", totalAmount);
+
+        if (totalAmount !== 100) {
+          console.warn(
+            "[Pagar.me] Atenção: A soma dos amounts de split não é 100%"
+          );
+        }
+      }
+
       const payload = {
         items: [
           {
             amount: params.amount,
-            description: "Product Purchase",
+            description: params.productDetails?.name,
             quantity: 1,
             code: "PROD_1",
           },
         ],
         customer: params.customer,
-        payments: [params.payment],
-        metadata: params.metadata,
+        payments: [
+          {
+            ...params.payment,
+            split: params.split,
+          },
+        ],
+        metadata: {
+          ...params.metadata,
+          product_name: params.productDetails?.name, // Adicionar ao metadata também
+          product_description: params.productDetails?.description,
+        },
       };
 
       console.log(
@@ -118,17 +154,18 @@ export class PagarmeClient {
     }
   }
 
-  async createPixPayment(params: {
-    amount: number;
-    customer: PagarmeCustomer;
-    expiresIn?: number;
-    metadata?: Record<string, unknown>;
-  }): Promise<PagarmeTransaction> {
+  async createPixPayment(
+    params: PixPaymentOptions
+  ): Promise<PagarmeTransaction> {
     console.log("[Pagar.me] Iniciando pagamento PIX");
 
     const transaction = await this.createTransaction({
       amount: params.amount,
       customer: params.customer,
+      productDetails: {
+        name: params.productDetails?.name || "Produto não especificado",
+        description: params.productDetails?.description,
+      },
       payment: {
         payment_method: "pix",
         pix: {
@@ -136,12 +173,13 @@ export class PagarmeClient {
           additional_information: [
             {
               name: "Produto",
-              value: "Compra PayStep",
+              value: params.productDetails?.name || "Compra PayStep",
             },
           ],
         },
       },
       metadata: params.metadata,
+      split: params.split,
     });
 
     // Log da resposta completa
@@ -166,13 +204,9 @@ export class PagarmeClient {
 
     return transaction;
   }
-  async createCreditCardPayment(params: {
-    amount: number;
-    customer: PagarmeCustomer;
-    cardData: PagarmeCreditCardInput;
-    metadata?: Record<string, unknown>;
-    installments?: number;
-  }): Promise<PagarmeTransaction> {
+  async createCreditCardPayment(
+    params: CreditCardPaymentOptions
+  ): Promise<PagarmeTransaction> {
     console.log("[Pagar.me] Iniciando pagamento com cartão");
 
     const defaultBillingAddress = {
@@ -186,6 +220,10 @@ export class PagarmeClient {
     return this.createTransaction({
       amount: params.amount,
       customer: params.customer,
+      productDetails: {
+        name: params.productDetails?.name || "Produto não especificado",
+        description: params.productDetails?.description,
+      },
       payment: {
         payment_method: "credit_card",
         credit_card: {
@@ -202,6 +240,7 @@ export class PagarmeClient {
         },
       },
       metadata: params.metadata,
+      split: params.split,
     });
   }
 
@@ -292,12 +331,12 @@ export class PagarmeClient {
     }
   }
 
-  // Listar recebedores
+  //lista os recebedores/ afiliados
   async listRecipients(params?: {
     page?: number;
     size?: number;
     status?: "active" | "inactive" | "suspended";
-  }): Promise<{ data: RecipientResponse[] }> {
+  }) {
     try {
       const queryParams = new URLSearchParams();
       if (params?.page) queryParams.append("page", params.page.toString());
@@ -312,7 +351,7 @@ export class PagarmeClient {
       );
 
       const responseData = await response.text();
-      console.log("[Pagar.me] Resposta lista de recebedores:", responseData);
+      //console.log("[Pagar.me] Resposta listagem de recebedores:", responseData);
 
       if (!response.ok) {
         throw new Error("Failed to list recipients");
@@ -320,7 +359,7 @@ export class PagarmeClient {
 
       return JSON.parse(responseData);
     } catch (error) {
-      console.error("[Pagar.me] Erro ao listar recebedores:", error);
+      //console.error("[Pagar.me] Erro ao listar recebedores:", error);
       throw error;
     }
   }
@@ -336,7 +375,7 @@ export class PagarmeClient {
       );
 
       const responseData = await response.text();
-      console.log("[Pagar.me] Resposta recebedor:", responseData);
+      //console.log("[Pagar.me] Resposta recebedor:", responseData);
 
       if (!response.ok) {
         throw new Error("Failed to get recipient");
@@ -365,7 +404,7 @@ export class PagarmeClient {
       );
 
       const responseData = await response.text();
-      console.log("[Pagar.me] Resposta atualização:", responseData);
+      // console.log("[Pagar.me] Resposta atualização:", responseData);
 
       if (!response.ok) {
         throw new Error("Failed to update recipient");
