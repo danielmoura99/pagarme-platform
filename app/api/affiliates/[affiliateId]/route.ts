@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AffiliateBankInfo } from "@/types/pagarme";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ affiliateId: string }> }

@@ -1,4 +1,5 @@
-// app/api/proxy-image/route.ts
+export const dynamic = "force-dynamic"; // app/api/proxy-image/route.ts
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get("url");
