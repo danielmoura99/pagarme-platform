@@ -14,11 +14,22 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        // Se estiver na página de login, sempre permite
-        if (req.nextUrl.pathname === "/login") {
+        // Páginas públicas - sempre permite acesso
+        const publicPaths = [
+          "/login",
+          "/checkout",
+          "/processing",
+          "/success",
+          "/error",
+          "/unavailable",
+        ];
+
+        // Verifica se o caminho atual está na lista de caminhos públicos
+        if (publicPaths.some((path) => req.nextUrl.pathname.startsWith(path))) {
           return true;
         }
-        // Para outras páginas, requer autenticação
+
+        // Para outras páginas (dashboard), requer autenticação
         return !!token;
       },
     },

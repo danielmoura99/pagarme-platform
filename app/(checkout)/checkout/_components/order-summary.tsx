@@ -52,7 +52,7 @@ export function OrderSummary({
 }: OrderSummaryProps) {
   const [couponCode, setCouponCode] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
-  const [selectedInstallment, setSelectedInstallment] = useState(1);
+  const [selectedInstallment, setSelectedInstallment] = useState(12);
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
     discountPercentage: number;
@@ -265,7 +265,7 @@ export function OrderSummary({
           <>
             <Separator />
             <div className="space-y-3">
-              <label className="text-sm font-medium">
+              <label className="text-sm font-medium ">
                 Opções de Parcelamento
               </label>
               <Select
@@ -275,7 +275,7 @@ export function OrderSummary({
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione o número de parcelas" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white">
                   {installmentOptions.map((option) => (
                     <SelectItem
                       key={option.number}
