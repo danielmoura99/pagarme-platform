@@ -71,8 +71,9 @@ model Order {
   installments  Int       @default(1)
   affiliateId   String?
   affiliate     Affiliate? @relation(fields: [affiliateId], references: [id])
-  couponId      String?   // Novo campo
-  coupon        Coupon?   @relation(fields: [couponId], references: [id]) // Nova relação
+  couponId      String?   
+  coupon        Coupon?   @relation(fields: [couponId], references: [id]) 
+  pagarmeTransactionId String? @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   splitAmount   Float?    // Valor da comissão calculada

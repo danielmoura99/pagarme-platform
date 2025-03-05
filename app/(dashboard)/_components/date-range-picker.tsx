@@ -41,6 +41,11 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
 
   const [preset, setPreset] = React.useState<string>("");
 
+  // Estado para controlar a seleção de intervalo
+  const [selectionState, setSelectionState] = React.useState<
+    "start" | "end" | "complete"
+  >("complete");
+
   // Atualizar o estado interno quando value mudar
   React.useEffect(() => {
     if (value) {
@@ -63,6 +68,15 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
       case "last30":
         from = addDays(today, -30);
         break;
+      case "last60":
+        from = addDays(today, -60);
+        break;
+      case "last90":
+        from = addDays(today, -90);
+        break;
+      case "lastyear":
+        from = addDays(today, -365);
+        break;
       case "currentMonth":
         from = new Date(today.getFullYear(), today.getMonth(), 1);
         break;
@@ -76,6 +90,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
 
     // Atualizar o estado interno
     setDate({ from, to });
+    setSelectionState("complete");
 
     // Chamar o callback se fornecido
     if (onChange && from && to) {
@@ -84,13 +99,47 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   };
 
   // Handler para quando o usuário seleciona uma data no calendário
-  const handleCalendarSelect = (newDate: DateRange | undefined) => {
-    setDate(newDate);
-
-    // Chamar o callback se fornecido e se ambas as datas estiverem definidas
-    if (onChange && newDate?.from && newDate?.to) {
-      onChange({ from: newDate.from, to: newDate.to });
+  // Handler para quando o usuário clica em uma data no calendário
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleCalendarSelect = (newDate: DateRange | any) => {
+    // Implementação aprimorada do seletor de intervalo
+    if (!newDate?.from) {
+      // Se não tiver data inicial, reseta o estado
+      setDate(undefined);
+      setSelectionState("start");
+      if (onChange) {
+        onChange({ from: new Date(), to: new Date() });
+      }
+      return;
     }
+
+    // Se estivermos selecionando a data inicial ou se a data final não estiver definida
+    if (selectionState === "start" || !newDate.to) {
+      const updatedRange = { from: newDate.from, to: newDate.from };
+      setDate(updatedRange);
+      setSelectionState("end");
+
+      // Para evitar chamadas desnecessárias com datas iguais
+      if (onChange) {
+        onChange(updatedRange);
+      }
+      return;
+    }
+
+    // Se a data final estiver definida (seleção completa)
+    setDate(newDate);
+    setSelectionState("complete");
+
+    if (onChange && newDate.from && newDate.to) {
+      onChange(newDate);
+    }
+  };
+
+  // Função para reiniciar a seleção
+  const resetSelection = () => {
+    setSelectionState("start");
+    setDate(undefined);
+    // Não chamamos onChange aqui para evitar resetar o estado no componente pai
   };
 
   return (
@@ -99,9 +148,12 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
         <SelectTrigger className="w-[180px] h-8">
           <SelectValue placeholder="Selecione um período" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="bg-white">
           <SelectItem value="last7">Últimos 7 dias</SelectItem>
           <SelectItem value="last30">Últimos 30 dias</SelectItem>
+          <SelectItem value="last60">Últimos 60 dias</SelectItem>
+          <SelectItem value="last90">Últimos 90 dias</SelectItem>
+          <SelectItem value="lastyear">Último ano</SelectItem>
           <SelectItem value="currentMonth">Mês atual</SelectItem>
           <SelectItem value="lastMonth">Mês anterior</SelectItem>
         </SelectContent>
@@ -131,8 +183,28 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto p-0 bg-white" align="start">
+          <div className="p-3 border-b">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">
+                {selectionState === "start"
+                  ? "Selecione a data inicial"
+                  : selectionState === "end"
+                    ? "Selecione a data final"
+                    : "Intervalo de datas"}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetSelection}
+                className="h-7 px-2 text-xs"
+              >
+                Reiniciar
+              </Button>
+            </div>
+          </div>
           <Calendar
+            className="bg-white"
             initialFocus
             mode="range"
             defaultMonth={selectedDate?.from}
@@ -141,6 +213,11 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
             locale={ptBR}
             numberOfMonths={2}
           />
+          <div className="p-3 border-t text-xs text-muted-foreground">
+            {selectionState === "start" &&
+              "Clique para selecionar a data inicial"}
+            {selectionState === "end" && "Agora selecione a data final"}
+          </div>
         </PopoverContent>
       </Popover>
     </div>

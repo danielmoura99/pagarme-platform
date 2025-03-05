@@ -48,8 +48,14 @@ export async function POST(req: Request) {
 
 async function handleOrderPaid(data: any) {
   try {
+    const pagarmeTransactionId = data.order.id;
+
+    console.log(
+      `[WEBHOOK_INFO] Buscando pedido pelo ID da transação Pagar.me: ${pagarmeTransactionId}`
+    );
+
     const order = await prisma.order.update({
-      where: { id: data.order.id },
+      where: { pagarmeTransactionId },
       data: {
         status: "paid",
       },

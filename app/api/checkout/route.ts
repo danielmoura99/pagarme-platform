@@ -185,6 +185,9 @@ export async function POST(request: Request) {
       status: transaction.status,
     });
 
+    // Extrair o ID da transação da Pagar.me
+    const pagarmeTransactionId = transaction.id;
+
     // 6. Criar ou atualizar customer
     console.log("[API] Processando customer...");
     const formattedDocument = customer.document.replace(/\D/g, "");
@@ -212,6 +215,7 @@ export async function POST(request: Request) {
       status: transaction.status,
       amount,
       paymentMethod,
+      pagarmeTransactionId,
       items: {
         create: {
           productId: dbProduct.id,
