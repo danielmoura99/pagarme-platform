@@ -100,3 +100,21 @@ export async function getCoupon(id: string) {
     return null;
   }
 }
+
+export async function inactivateCoupon(id: string) {
+  try {
+    // Em vez de excluir, apenas marcamos como inativo
+    const coupon = await prisma.coupon.update({
+      where: { id },
+      data: {
+        active: false,
+      },
+    });
+
+    revalidatePath("/coupons");
+    return coupon;
+  } catch (error) {
+    console.error("[INACTIVATE_COUPON_ERROR]", error);
+    throw new Error("Failed to inactivate coupon");
+  }
+}

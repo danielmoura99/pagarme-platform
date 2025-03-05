@@ -36,18 +36,28 @@ export function CellAction({ data }: CellActionProps) {
   const onDelete = async () => {
     try {
       setLoading(true);
-      await fetch(`/api/coupons/${data.id}`, {
+      const response = await fetch(`/api/coupons/${data.id}`, {
         method: "DELETE",
       });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Erro ao processar cupom");
+      }
+
       router.refresh();
       toast({
-        description: "Cupom excluído com sucesso.",
+        description: result.message || "Cupom processado com sucesso.",
       });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
+      console.error("Erro:", error);
       toast({
         variant: "destructive",
-        description: "Ocorreu um erro ao excluir o cupom.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro ao processar o cupom.",
       });
     } finally {
       setLoading(false);
@@ -79,7 +89,7 @@ export function CellAction({ data }: CellActionProps) {
             <Edit className="mr-2 h-4 w-4" /> Editar
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setOpen(true)}>
-            <Trash className="mr-2 h-4 w-4" /> Excluir
+            <Trash className="mr-2 h-4 w-4" /> Excluir/Inativar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
