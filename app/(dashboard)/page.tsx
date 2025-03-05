@@ -1,20 +1,25 @@
-// src/app/page.tsx
+// app/(dashboard)/page.tsx
+import { Suspense } from "react";
+import { Heading } from "@/components/ui/heading";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DateProvider } from "./_components/date-context";
+import { DashboardContent } from "./_components/dashboard-content";
 
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
-
-export default async function Home() {
-  const session = await getServerSession(authOptions);
-
-  if (!session) {
-    redirect("/login");
-  }
+export default function DashboardPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <h1 className="text-4xl font-bold">Pagina em desenvolvimento</h1>
+    <DateProvider>
+      <div className="container mx-3 py-8 space-y-6">
+        <Heading
+          title="Visão Geral"
+          description="Monitor de vendas e transações"
+        />
+        <Separator />
+
+        <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>
+          <DashboardContent />
+        </Suspense>
       </div>
-    </main>
+    </DateProvider>
   );
 }
