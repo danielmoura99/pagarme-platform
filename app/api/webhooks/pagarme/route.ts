@@ -63,38 +63,105 @@ async function handleOrderPaid(data: any) {
       JSON.stringify(data, null, 2)
     );
 
-    const pagarmeTransactionId = data.order.id;
+    // Verificar se temos o ID da transação
+    const pagarmeTransactionId = data.order?.id;
+    console.log("[HANDLE_ORDER_PAID] ID da transação:", pagarmeTransactionId);
 
-    console.log(
-      `[WEBHOOK_INFO] Buscando pedido pelo ID da transação Pagar.me: ${pagarmeTransactionId}`
-    );
-
-    const order = await prisma.order.update({
-      where: { pagarmeTransactionId },
-      data: {
-        status: "paid",
-      },
-      include: {
-        items: true,
-      },
-    });
-
-    // Se houver cupom, incrementar o uso
-    if (order.couponId) {
-      await prisma.coupon.update({
-        where: { id: order.couponId },
-        data: {
-          usageCount: {
-            increment: 1,
-          },
-        },
-      });
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_PAID_ERROR] ID da transação não encontrado no payload"
+      );
+      return;
     }
 
-    // Aqui você pode adicionar outras ações pós-pagamento
-    // Por exemplo: enviar email, criar acesso ao produto, etc.
+    // Tentar encontrar o pedido pelo ID da transação
+    try {
+      const order = await prisma.order.findUnique({
+        where: { pagarmeTransactionId },
+      });
+
+      console.log(
+        "[HANDLE_ORDER_PAID] Pedido encontrado:",
+        order ? "Sim" : "Não"
+      );
+
+      if (order) {
+        console.log(
+          "[HANDLE_ORDER_PAID] Atualizando status do pedido:",
+          order.id
+        );
+
+        // Atualizar o status
+        const updatedOrder = await prisma.order.update({
+          where: { id: order.id },
+          data: { status: "paid" },
+          include: { items: true },
+        });
+
+        console.log(
+          "[HANDLE_ORDER_PAID] Pedido atualizado:",
+          updatedOrder.id,
+          updatedOrder.status
+        );
+
+        // Processar cupom
+        if (updatedOrder.couponId) {
+          await prisma.coupon.update({
+            where: { id: updatedOrder.couponId },
+            data: {
+              usageCount: { increment: 1 },
+            },
+          });
+          console.log("[HANDLE_ORDER_PAID] Uso do cupom incrementado");
+        }
+      } else {
+        console.error(
+          "[HANDLE_ORDER_PAID_ERROR] Pedido não encontrado com pagarmeTransactionId:",
+          pagarmeTransactionId
+        );
+
+        // Tentar busca alternativa pelo ID
+        try {
+          console.log(
+            "[HANDLE_ORDER_PAID] Tentando busca alternativa pelo ID:",
+            data.order.id
+          );
+          const fallbackOrder = await prisma.order.update({
+            where: { id: data.order.id },
+            data: { status: "paid" },
+            include: { items: true },
+          });
+
+          console.log(
+            "[HANDLE_ORDER_PAID] Pedido encontrado por fallback:",
+            fallbackOrder.id
+          );
+
+          // Processar cupom também
+          if (fallbackOrder.couponId) {
+            await prisma.coupon.update({
+              where: { id: fallbackOrder.couponId },
+              data: {
+                usageCount: { increment: 1 },
+              },
+            });
+          }
+        } catch (fallbackError) {
+          console.error(
+            "[HANDLE_ORDER_PAID_ERROR] Falha na busca alternativa:",
+            fallbackError
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        "[HANDLE_ORDER_PAID_ERROR] Erro ao buscar/atualizar pedido:",
+        error
+      );
+      throw error;
+    }
   } catch (error) {
-    console.error("[HANDLE_ORDER_PAID_ERROR]", error);
+    console.error("[HANDLE_ORDER_PAID_ERROR] Erro geral:", error);
     throw error;
   }
 }
