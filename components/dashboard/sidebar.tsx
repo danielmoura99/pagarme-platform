@@ -43,7 +43,7 @@ const data = {
     },
     {
       title: "Checkout",
-      url: "/checkout",
+      url: "/checkout-settings",
       icon: ShoppingCart,
     },
     {

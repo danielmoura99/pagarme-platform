@@ -106,12 +106,17 @@ export function GenerateLinkModal({
 
         <div className="space-y-6 py-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Selecione o Produto</label>
+            <label className="text-sm font-medium bg-white">
+              Selecione o Produto
+            </label>
             <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um produto..." />
+              <SelectTrigger className="bg-white">
+                <SelectValue
+                  className="bg-white"
+                  placeholder="Selecione um produto..."
+                />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white">
                 {products.map((product) => (
                   <SelectItem key={product.id} value={product.id}>
                     {product.name}

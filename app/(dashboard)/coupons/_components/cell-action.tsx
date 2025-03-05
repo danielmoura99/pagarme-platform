@@ -70,7 +70,7 @@ export function CellAction({ data }: CellActionProps) {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent className="bg-white" align="end">
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
           <DropdownMenuItem onClick={onCopy}>
             <Copy className="mr-2 h-4 w-4" /> Copiar código

@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { useToast } from "@/hooks/use-toast";
-import { deleteProduct } from "../_actions";
 import { ProductColumn } from "./columns";
+import { discontinueProduct } from "../_actions";
 
 interface CellActionProps {
   data: ProductColumn;
@@ -31,20 +31,20 @@ export function CellAction({ data }: CellActionProps) {
     router.push(`/products/edit/${data.id}`);
   };
 
-  const onDelete = async () => {
+  const onDiscontinue = async () => {
     try {
       setLoading(true);
-      await deleteProduct(data.id);
+      await discontinueProduct(data.id);
       router.refresh();
 
       toast({
-        description: "Produto excluído com sucesso.",
+        description: "Produto descontinuado com sucesso.",
       });
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       toast({
         variant: "destructive",
-        description: "Ocorreu um erro ao excluir o produto.",
+        description: "Ocorreu um erro ao descontinuar o produto.",
       });
     } finally {
       setLoading(false);
@@ -57,7 +57,7 @@ export function CellAction({ data }: CellActionProps) {
       <AlertModal
         isOpen={open}
         onClose={() => setOpen(false)}
-        onConfirm={onDelete}
+        onConfirm={onDiscontinue}
         loading={loading}
       />
       <DropdownMenu>
@@ -67,13 +67,13 @@ export function CellAction({ data }: CellActionProps) {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent className="bg-white" align="end">
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
           <DropdownMenuItem onClick={onEdit}>
             <Edit className="mr-2 h-4 w-4" /> Editar
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setOpen(true)}>
-            <Trash className="mr-2 h-4 w-4" /> Excluir
+            <Trash className="mr-2 h-4 w-4" /> Descontinuar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

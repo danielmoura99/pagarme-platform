@@ -148,3 +148,32 @@ export async function createProduct(data: ProductFormValues) {
     throw new Error("Failed to create product");
   }
 }
+
+export async function discontinueProduct(id: string) {
+  try {
+    // Primeiro, busque o produto atual para obter a descrição
+    const existingProduct = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!existingProduct) {
+      throw new Error("Product not found");
+    }
+
+    // Agora atualize o produto com a descrição modificada
+    const updatedProduct = await prisma.product.update({
+      where: { id },
+      data: {
+        active: false,
+        // Use a descrição do produto existente
+        description: `[DESCONTINUADO] ${existingProduct.description || ""}`,
+      },
+    });
+
+    revalidatePath("/products");
+    return updatedProduct;
+  } catch (error) {
+    console.error("[DISCONTINUE_PRODUCT_ERROR]", error);
+    throw new Error("Failed to discontinue product");
+  }
+}

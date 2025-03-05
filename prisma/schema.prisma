@@ -133,3 +133,30 @@ model Coupon {
   orders            Order[]   // Pedidos que usaram o cupom
   products          Product[]  // Nova relação
 }
+
+model CheckoutSettings {
+  id                    String    @id @default(cuid())
+  companyName           String
+  logoUrl               String?
+  primaryColor          String
+  secondaryColor        String
+  accentColor           String
+  checkoutTitle         String
+  checkoutDescription   String
+  successMessage        String
+  termsAndConditionsUrl String?
+  privacyPolicyUrl      String?
+  showInstallments      Boolean   @default(true)
+  maxInstallments       Int       @default(12)
+  showPixDiscount       Boolean   @default(false)
+  pixDiscountPercentage Float     @default(0)
+  defaultPaymentMethod  String    @default("credit_card")
+  enableOrderBumps      Boolean   @default(true)
+  headerBackgroundImage String?
+  footerText            String?
+  customCss             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("checkout_settings")
+}
