@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/api/webhooks/pagarme/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { pagarme } from "@/lib/pagarme";
 import { headers } from "next/headers";
 
-export async function POST(req: Request) {
+// Função compartilhada para processar o webhook independente do método HTTP
+async function processWebhook(req: Request) {
   try {
     // Obter o corpo da requisição como texto para validação da assinatura
     const body = await req.text();
@@ -15,9 +15,12 @@ export async function POST(req: Request) {
       "[WEBHOOK_RECEIVED] Headers:",
       Object.fromEntries(headersList.entries())
     );
+    console.log("[WEBHOOK_RECEIVED] Method:", req.method);
 
     // Validar a assinatura do webhook
     const isValid = await pagarme.processWebhook(await headersList, body);
+    console.log("[WEBHOOK_SIGNATURE_VALID]:", isValid);
+
     if (!isValid) {
       console.error("[WEBHOOK_ERROR] Assinatura inválida");
       return new NextResponse("Assinatura inválida", { status: 401 });
@@ -26,22 +29,27 @@ export async function POST(req: Request) {
     // Converter o corpo para JSON após validação
     const webhookData = JSON.parse(body);
 
-    // Log completo do payload para debug
+    // Log para debug
     console.log("[WEBHOOK_PAYLOAD]", JSON.stringify(webhookData, null, 2));
+    console.log("[WEBHOOK_TYPE]", webhookData.type);
     console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.order?.id);
 
     // Processar evento
     switch (webhookData.type) {
       case "order.paid":
+        console.log("[WEBHOOK_HANDLER] Chamando handleOrderPaid");
         await handleOrderPaid(webhookData.data);
         break;
       case "order.payment_failed":
+        console.log("[WEBHOOK_HANDLER] Chamando handleOrderFailed");
         await handleOrderFailed(webhookData.data);
         break;
       case "order.refunded":
+        console.log("[WEBHOOK_HANDLER] Chamando handleOrderRefunded");
         await handleOrderRefunded(webhookData.data);
         break;
       case "order.pending":
+        console.log("[WEBHOOK_HANDLER] Chamando handleOrderPending");
         await handleOrderPending(webhookData.data);
         break;
       default:
@@ -55,9 +63,25 @@ export async function POST(req: Request) {
   }
 }
 
+// Exportar handlers para diferentes métodos HTTP
+export async function POST(req: Request) {
+  return await processWebhook(req);
+}
+
+export async function GET(req: Request) {
+  return await processWebhook(req);
+}
+
+export async function PUT(req: Request) {
+  return await processWebhook(req);
+}
+
+export async function DELETE(req: Request) {
+  return await processWebhook(req);
+}
+
 async function handleOrderPaid(data: any) {
   try {
-    // Log mais detalhado
     console.log(
       "[HANDLE_ORDER_PAID] Dados recebidos:",
       JSON.stringify(data, null, 2)
@@ -104,7 +128,7 @@ async function handleOrderPaid(data: any) {
           updatedOrder.status
         );
 
-        // Processar cupom
+        // Se houver cupom, incrementar o uso
         if (updatedOrder.couponId) {
           await prisma.coupon.update({
             where: { id: updatedOrder.couponId },
@@ -120,7 +144,7 @@ async function handleOrderPaid(data: any) {
           pagarmeTransactionId
         );
 
-        // Tentar busca alternativa pelo ID
+        // Fallback: tentar atualizar pelo ID do pedido diretamente
         try {
           console.log(
             "[HANDLE_ORDER_PAID] Tentando busca alternativa pelo ID:",
@@ -166,17 +190,60 @@ async function handleOrderPaid(data: any) {
   }
 }
 
+// Aplicar a mesma estrutura lógica às outras funções de handler
 async function handleOrderFailed(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.order.id },
-      data: {
-        status: "failed",
-      },
+    console.log(
+      "[HANDLE_ORDER_FAILED] Dados recebidos:",
+      JSON.stringify(data, null, 2)
+    );
+
+    const pagarmeTransactionId = data.order?.id;
+    console.log("[HANDLE_ORDER_FAILED] ID da transação:", pagarmeTransactionId);
+
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_FAILED_ERROR] ID da transação não encontrado no payload"
+      );
+      return;
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId },
     });
 
-    // Aqui você pode adicionar ações para falha
-    // Por exemplo: notificar o cliente, tentar reprocessar, etc.
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "failed" },
+      });
+
+      console.log(
+        "[HANDLE_ORDER_FAILED] Pedido atualizado para failed:",
+        order.id
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_FAILED_ERROR] Pedido não encontrado com pagarmeTransactionId:",
+        pagarmeTransactionId
+      );
+
+      try {
+        await prisma.order.update({
+          where: { id: data.order.id },
+          data: { status: "failed" },
+        });
+        console.log(
+          "[HANDLE_ORDER_FAILED] Pedido atualizado por fallback:",
+          data.order.id
+        );
+      } catch (fallbackError) {
+        console.error(
+          "[HANDLE_ORDER_FAILED_ERROR] Falha na busca alternativa:",
+          fallbackError
+        );
+      }
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_FAILED_ERROR]", error);
     throw error;
@@ -185,12 +252,60 @@ async function handleOrderFailed(data: any) {
 
 async function handleOrderRefunded(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.order.id },
-      data: {
-        status: "refunded",
-      },
+    console.log(
+      "[HANDLE_ORDER_REFUNDED] Dados recebidos:",
+      JSON.stringify(data, null, 2)
+    );
+
+    const pagarmeTransactionId = data.order?.id;
+    console.log(
+      "[HANDLE_ORDER_REFUNDED] ID da transação:",
+      pagarmeTransactionId
+    );
+
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_REFUNDED_ERROR] ID da transação não encontrado no payload"
+      );
+      return;
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId },
     });
+
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "refunded" },
+      });
+
+      console.log(
+        "[HANDLE_ORDER_REFUNDED] Pedido atualizado para refunded:",
+        order.id
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_REFUNDED_ERROR] Pedido não encontrado com pagarmeTransactionId:",
+        pagarmeTransactionId
+      );
+
+      try {
+        await prisma.order.update({
+          where: { id: data.order.id },
+          data: { status: "refunded" },
+        });
+        console.log(
+          "[HANDLE_ORDER_REFUNDED] Pedido atualizado por fallback:",
+          data.order.id
+        );
+      } catch (fallbackError) {
+        console.error(
+          "[HANDLE_ORDER_REFUNDED_ERROR] Falha na busca alternativa:",
+          fallbackError
+        );
+      }
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_REFUNDED_ERROR]", error);
     throw error;
@@ -199,22 +314,62 @@ async function handleOrderRefunded(data: any) {
 
 async function handleOrderPending(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.order.id },
-      data: {
-        status: "pending",
-      },
+    console.log(
+      "[HANDLE_ORDER_PENDING] Dados recebidos:",
+      JSON.stringify(data, null, 2)
+    );
+
+    const pagarmeTransactionId = data.order?.id;
+    console.log(
+      "[HANDLE_ORDER_PENDING] ID da transação:",
+      pagarmeTransactionId
+    );
+
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_PENDING_ERROR] ID da transação não encontrado no payload"
+      );
+      return;
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId },
     });
+
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { status: "pending" },
+      });
+
+      console.log(
+        "[HANDLE_ORDER_PENDING] Pedido atualizado para pending:",
+        order.id
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_PENDING_ERROR] Pedido não encontrado com pagarmeTransactionId:",
+        pagarmeTransactionId
+      );
+
+      try {
+        await prisma.order.update({
+          where: { id: data.order.id },
+          data: { status: "pending" },
+        });
+        console.log(
+          "[HANDLE_ORDER_PENDING] Pedido atualizado por fallback:",
+          data.order.id
+        );
+      } catch (fallbackError) {
+        console.error(
+          "[HANDLE_ORDER_PENDING_ERROR] Falha na busca alternativa:",
+          fallbackError
+        );
+      }
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_PENDING_ERROR]", error);
     throw error;
   }
 }
-
-// Configurar apenas o método POST
-export const GET = () =>
-  new NextResponse("Método não permitido", { status: 405 });
-export const PUT = () =>
-  new NextResponse("Método não permitido", { status: 405 });
-export const DELETE = () =>
-  new NextResponse("Método não permitido", { status: 405 });
