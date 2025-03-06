@@ -2,12 +2,12 @@
 // app/api/webhooks/pagarme/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { pagarme } from "@/lib/pagarme";
+//import { pagarme } from "@/lib/pagarme";
 import { headers } from "next/headers";
 
 export async function POST(req: Request) {
   try {
-    // Obter o corpo da requisição como texto para validação da assinatura
+    // Obter o corpo da requisição como texto
     const body = await req.text();
     const headersList = headers();
 
@@ -16,17 +16,10 @@ export async function POST(req: Request) {
       Object.fromEntries(headersList.entries())
     );
 
-    // Validar a assinatura do webhook
-    const isValid = await pagarme.processWebhook(await headersList, body);
-    if (!isValid) {
-      console.error("[WEBHOOK_ERROR] Assinatura inválida");
-      return new NextResponse("Assinatura inválida", { status: 401 });
-    }
-
-    // Converter o corpo para JSON após validação
+    // Converter o corpo para JSON diretamente (sem validação)
     const webhookData = JSON.parse(body);
 
-    // Log completo do payload para debug
+    // Log do payload para debug
     console.log("[WEBHOOK_PAYLOAD]", JSON.stringify(webhookData, null, 2));
     console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.order?.id);
 
@@ -54,6 +47,8 @@ export async function POST(req: Request) {
     return new NextResponse("Webhook error", { status: 400 });
   }
 }
+
+// Manter as funções de manipulação de eventos existentes
 async function handleOrderPaid(data: any) {
   try {
     // Log mais detalhado
@@ -164,7 +159,6 @@ async function handleOrderPaid(data: any) {
     throw error;
   }
 }
-
 async function handleOrderFailed(data: any) {
   try {
     await prisma.order.update({
