@@ -2,7 +2,6 @@
 // app/api/webhooks/pagarme/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-//import { pagarme } from "@/lib/pagarme";
 import { headers } from "next/headers";
 
 export async function POST(req: Request) {
@@ -21,7 +20,8 @@ export async function POST(req: Request) {
 
     // Log do payload para debug
     console.log("[WEBHOOK_PAYLOAD]", JSON.stringify(webhookData, null, 2));
-    console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.order?.id);
+    console.log("[WEBHOOK_TYPE]", webhookData.type);
+    console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.id); // Corrigido para extrair o ID correto
 
     // Processar evento
     switch (webhookData.type) {
@@ -48,7 +48,6 @@ export async function POST(req: Request) {
   }
 }
 
-// Manter as funções de manipulação de eventos existentes
 async function handleOrderPaid(data: any) {
   try {
     // Log mais detalhado
@@ -57,8 +56,8 @@ async function handleOrderPaid(data: any) {
       JSON.stringify(data, null, 2)
     );
 
-    // Verificar se temos o ID da transação
-    const pagarmeTransactionId = data.order?.id;
+    // Verificar se temos o ID da transação - CORRIGIDO
+    const pagarmeTransactionId = data.id; // Extraindo diretamente do data.id
     console.log("[HANDLE_ORDER_PAID] ID da transação:", pagarmeTransactionId);
 
     if (!pagarmeTransactionId) {
@@ -114,31 +113,81 @@ async function handleOrderPaid(data: any) {
           pagarmeTransactionId
         );
 
-        // Tentar busca alternativa pelo ID
+        // Tentar busca alternativa pelo código (que também pode estar nos metadados)
         try {
+          const orderCode = data.code || data.charges?.[0]?.code; // Tenta outras possibilidades
           console.log(
-            "[HANDLE_ORDER_PAID] Tentando busca alternativa pelo ID:",
-            data.order.id
+            "[HANDLE_ORDER_PAID] Tentando busca alternativa pelo código:",
+            orderCode
           );
-          const fallbackOrder = await prisma.order.update({
-            where: { id: data.order.id },
-            data: { status: "paid" },
+
+          // Verificando se temos algum outro identificador nos metadados
+          const productId = data.metadata?.product_id;
+          console.log(
+            "[HANDLE_ORDER_PAID] Product ID dos metadados:",
+            productId
+          );
+
+          // Buscar por pedidos recentes com o mesmo produto
+          const recentOrders = await prisma.order.findMany({
+            where: {
+              items: {
+                some: {
+                  productId: productId,
+                },
+              },
+              status: {
+                in: ["pending", "processing"],
+              },
+              createdAt: {
+                // Pedidos nas últimas 24 horas
+                gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+              },
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 5,
             include: { items: true },
           });
 
           console.log(
-            "[HANDLE_ORDER_PAID] Pedido encontrado por fallback:",
-            fallbackOrder.id
+            "[HANDLE_ORDER_PAID] Pedidos recentes encontrados:",
+            recentOrders.length
           );
 
-          // Processar cupom também
-          if (fallbackOrder.couponId) {
-            await prisma.coupon.update({
-              where: { id: fallbackOrder.couponId },
+          if (recentOrders.length > 0) {
+            // Atualizar o primeiro pedido recente (mais recente)
+            const orderToUpdate = recentOrders[0];
+
+            // Atualizar o pedido com o ID da transação do Pagar.me
+            const updatedOrder = await prisma.order.update({
+              where: { id: orderToUpdate.id },
               data: {
-                usageCount: { increment: 1 },
+                status: "paid",
+                pagarmeTransactionId, // Atualiza com o ID da transação para futuros webhooks
               },
+              include: { items: true },
             });
+
+            console.log(
+              "[HANDLE_ORDER_PAID] Pedido recente atualizado:",
+              updatedOrder.id
+            );
+
+            // Processar cupom
+            if (updatedOrder.couponId) {
+              await prisma.coupon.update({
+                where: { id: updatedOrder.couponId },
+                data: {
+                  usageCount: { increment: 1 },
+                },
+              });
+            }
+          } else {
+            console.error(
+              "[HANDLE_ORDER_PAID_ERROR] Nenhum pedido recente encontrado para atualizar"
+            );
           }
         } catch (fallbackError) {
           console.error(
@@ -159,17 +208,40 @@ async function handleOrderPaid(data: any) {
     throw error;
   }
 }
+
+// Atualizar também as outras funções para usar a estrutura correta
 async function handleOrderFailed(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.order.id },
-      data: {
-        status: "failed",
-      },
+    const pagarmeTransactionId = data.id; // ID correto
+
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_FAILED_ERROR] ID da transação não encontrado"
+      );
+      return;
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId },
     });
 
-    // Aqui você pode adicionar ações para falha
-    // Por exemplo: notificar o cliente, tentar reprocessar, etc.
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "failed",
+        },
+      });
+      console.log(
+        "[HANDLE_ORDER_FAILED] Pedido atualizado como falha:",
+        order.id
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_FAILED_ERROR] Pedido não encontrado:",
+        pagarmeTransactionId
+      );
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_FAILED_ERROR]", error);
     throw error;
@@ -178,12 +250,36 @@ async function handleOrderFailed(data: any) {
 
 async function handleOrderRefunded(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.order.id },
-      data: {
-        status: "refunded",
-      },
+    const pagarmeTransactionId = data.id; // ID correto
+
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_REFUNDED_ERROR] ID da transação não encontrado"
+      );
+      return;
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId },
     });
+
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "refunded",
+        },
+      });
+      console.log(
+        "[HANDLE_ORDER_REFUNDED] Pedido atualizado como reembolsado:",
+        order.id
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_REFUNDED_ERROR] Pedido não encontrado:",
+        pagarmeTransactionId
+      );
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_REFUNDED_ERROR]", error);
     throw error;
@@ -192,12 +288,36 @@ async function handleOrderRefunded(data: any) {
 
 async function handleOrderPending(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.order.id },
-      data: {
-        status: "pending",
-      },
+    const pagarmeTransactionId = data.id; // ID correto
+
+    if (!pagarmeTransactionId) {
+      console.error(
+        "[HANDLE_ORDER_PENDING_ERROR] ID da transação não encontrado"
+      );
+      return;
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId },
     });
+
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "pending",
+        },
+      });
+      console.log(
+        "[HANDLE_ORDER_PENDING] Pedido atualizado como pendente:",
+        order.id
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_PENDING_ERROR] Pedido não encontrado:",
+        pagarmeTransactionId
+      );
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_PENDING_ERROR]", error);
     throw error;
