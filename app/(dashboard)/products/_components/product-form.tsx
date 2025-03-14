@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // app/(dashboard)/products/_components/product-form.tsx
 "use client";
 
-import { useState } from "react";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -29,8 +29,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { createProduct, updateProduct } from "../_actions";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { MultiSelect } from "@/components/ui/multi-select";
 import { OrderBumpSelect } from "./order-bump-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = [
@@ -48,6 +56,19 @@ const formSchema = z.object({
     .min(10, "Descrição deve ter pelo menos 10 caracteres"),
   price: z.coerce.number().min(0.01, "Preço deve ser maior que zero"),
   active: z.boolean().default(true),
+
+  // Novos campos
+  productType: z
+    .enum(["evaluation", "educational", "combo"], {
+      required_error: "Selecione o tipo de produto",
+    })
+    .default("evaluation"),
+
+  educationalIds: z.string().optional(),
+  courseId: z.string().optional(),
+  courseName: z.string().optional(),
+
+  // Campos existentes
   image: z
     .custom<FileList>()
     .refine(
@@ -115,11 +136,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       description: "",
       price: 0,
       active: true,
+      productType: "evaluation",
+      courseId: "",
+      courseName: "",
+      educationalIds: "",
     },
     mode: "onChange",
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const watchImage = form.watch("image");
+  const watchProductType = form.watch("productType");
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -197,7 +224,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       <div className="flex items-center justify-between mb-4">
         <Button
           variant="ghost"
-          onClick={() => router.push("/products")} // Alterado aqui
+          onClick={() => router.push("/products")}
           className="flex items-center gap-2"
         >
           <ArrowLeft size={16} />
@@ -224,6 +251,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   <TabsTrigger value="media">Mídia</TabsTrigger>
                   <TabsTrigger value="pricing">Preços</TabsTrigger>
                   <TabsTrigger value="orderbumps">Order Bumps</TabsTrigger>
+                  <TabsTrigger value="integration">Integração</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="basic" className="mt-4 space-y-4">
@@ -302,6 +330,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   <FormField
                     control={form.control}
                     name="image"
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
                     render={({ field: { value, onChange, ...field } }) => (
                       <FormItem>
                         <FormLabel>Imagem do produto</FormLabel>
@@ -398,7 +427,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           Produtos Complementares (Order Bumps)
                         </FormLabel>
                         <OrderBumpSelect
-                          availableProducts={availableProducts.filter(
+                          availableProducts={(availableProducts ?? []).filter(
                             (p) => p.id !== initialData?.id
                           )}
                           value={field.value}
@@ -414,6 +443,120 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </FormItem>
                     )}
                   />
+                </TabsContent>
+
+                <TabsContent value="integration" className="mt-4 space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="productType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tipo de Produto</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          disabled={loading}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o tipo de produto" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-white">
+                            <SelectItem value="evaluation">
+                              Avaliação
+                            </SelectItem>
+                            <SelectItem value="educational">
+                              Educacional
+                            </SelectItem>
+                            <SelectItem value="combo">
+                              Combo (Avaliação + Educacional)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Define o fluxo de integração após a compra
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Campos específicos para produtos educacionais */}
+                  {(watchProductType === "educational" ||
+                    watchProductType === "combo") && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="courseId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>ID do Curso</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                disabled={loading}
+                                placeholder="ID do curso no portal educacional"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Identificador único do curso no sistema
+                              client-portal
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="courseName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome do Curso</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                disabled={loading}
+                                placeholder="Nome do curso para referência"
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Nome do curso para referência interna
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+
+                  {/* Campos específicos para produtos combo */}
+                  {watchProductType === "combo" && (
+                    <FormField
+                      control={form.control}
+                      name="educationalIds"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            IDs de Produtos Educacionais (Combo)
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              disabled={loading}
+                              placeholder="IDs separados por vírgula (ex: id1,id2)"
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Para combos, informe os IDs dos cursos educacionais
+                            incluídos
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </TabsContent>
               </Tabs>
 

@@ -114,12 +114,15 @@ export async function POST(request: Request) {
       },
     };
 
+    const productType = dbProduct.productType || "evaluation";
+
     // 5. Criar transação na Pagar.me
     let transaction;
     const amount = body.totalAmount || dbProduct.prices[0].amount;
     const metadata = {
       product_id: dbProduct.id,
       affiliate_id: affiliateRef || null,
+      product_type: productType,
     };
 
     if (paymentMethod === "credit_card") {
@@ -146,6 +149,7 @@ export async function POST(request: Request) {
         productDetails: {
           name: dbProduct.name, // Adicionando nome do produto
           description: dbProduct.description || undefined, // Adicionando descrição se existir
+          productType: productType as "evaluation" | "educational" | "combo",
         },
         cardData: {
           number: cardData.cardNumber.replace(/\D/g, ""),
@@ -159,6 +163,7 @@ export async function POST(request: Request) {
           ...metadata,
           product_name: dbProduct.name, // Adicionar ao metadata também
           product_description: dbProduct.description,
+          productType: productType as "evaluation" | "educational" | "combo",
         },
         split: splitRules,
       });
@@ -169,12 +174,14 @@ export async function POST(request: Request) {
         productDetails: {
           name: dbProduct.name, // Adicionando nome do produto
           description: dbProduct.description || undefined,
+          productType: productType as "evaluation" | "educational" | "combo",
         },
         expiresIn: 3600,
         metadata: {
           ...metadata,
           product_name: dbProduct.name,
           product_description: dbProduct.description,
+          productType: productType as "evaluation" | "educational" | "combo",
         },
         split: splitRules,
       });

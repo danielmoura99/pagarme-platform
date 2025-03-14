@@ -45,6 +45,7 @@ export class PagarmeClient {
     productDetails?: {
       name: string;
       description?: string;
+      productType?: "evaluation" | "educational" | "combo";
     };
   }): Promise<PagarmeTransaction> {
     try {
@@ -87,6 +88,7 @@ export class PagarmeClient {
           ...params.metadata,
           product_name: params.productDetails?.name, // Adicionar ao metadata também
           product_description: params.productDetails?.description,
+          product_type: params.productDetails?.productType || "evaluation",
         },
       };
 
@@ -165,6 +167,7 @@ export class PagarmeClient {
       productDetails: {
         name: params.productDetails?.name || "Produto não especificado",
         description: params.productDetails?.description,
+        productType: params.productDetails?.productType || "evaluation",
       },
       payment: {
         payment_method: "pix",
@@ -178,7 +181,10 @@ export class PagarmeClient {
           ],
         },
       },
-      metadata: params.metadata,
+      metadata: {
+        ...params.metadata,
+        product_type: params.productDetails?.productType || "evaluation", // Garantir que está no metadata também
+      },
       split: params.split,
     });
 
@@ -239,7 +245,10 @@ export class PagarmeClient {
           },
         },
       },
-      metadata: params.metadata,
+      metadata: {
+        ...params.metadata,
+        product_type: params.productDetails?.productType || "evaluation", // Garantir que está no metadata também
+      },
       split: params.split,
     });
   }

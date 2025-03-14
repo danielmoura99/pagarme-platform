@@ -50,15 +50,6 @@ export interface PagarmeCard {
   billing_address?: PagarmeBillingAddress;
 }
 
-export interface PagarmeCard {
-  number: string;
-  holder_name: string;
-  exp_month: number;
-  exp_year: number;
-  cvv: string;
-  billing_address?: PagarmeBillingAddress;
-}
-
 export interface PagarmePixInfo {
   expires_in: number;
   additional_information?: Array<{
@@ -338,6 +329,7 @@ export interface PagarmeCreateTransactionOptions {
 export interface ProductDetails {
   name: string;
   description?: string;
+  productType?: "evaluation" | "educational" | "combo";
 }
 
 export interface CreditCardPaymentOptions {

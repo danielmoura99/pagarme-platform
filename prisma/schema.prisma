@@ -38,6 +38,8 @@ model Product {
   name          String
   description   String?
   active        Boolean   @default(true)
+  productType   String    @default("evaluation") // "evaluation", "educational", "combo"
+  courseId      String?   // ID do curso no sistema client-portal
   prices        Price[]
   orderItems    OrderItem[]
   coupons       Coupon[]   // Nova relação

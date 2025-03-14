@@ -72,7 +72,7 @@ export function OrderBumpSelect({
                 : "Selecione os produtos"}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-white">
             {availableProducts.map((product) => (
               <SelectItem key={product.id} value={product.id}>
                 {product.name}
