@@ -177,21 +177,22 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
       const priceInCents = Math.round(data.price * 100);
 
+      const submitData = {
+        ...data,
+        price: priceInCents,
+        // Se não tiver courseId, não envie a propriedade
+        ...(data.courseId ? { courseId: data.courseId } : {}),
+      };
+
       if (initialData?.id) {
-        await updateProduct(initialData.id, {
-          ...data,
-          price: priceInCents,
-        });
+        await updateProduct(initialData.id, submitData);
 
         toast({
           title: "Sucesso!",
           description: "Produto atualizado com sucesso.",
         });
       } else {
-        await createProduct({
-          ...data,
-          price: priceInCents,
-        });
+        await createProduct(submitData);
 
         toast({
           title: "Sucesso!",

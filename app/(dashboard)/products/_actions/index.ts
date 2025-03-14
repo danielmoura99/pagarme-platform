@@ -11,7 +11,7 @@ interface ProductFormValues {
   price: number;
   active: boolean;
   productType: "evaluation" | "educational" | "combo";
-  courseId: string;
+  courseId?: string;
   orderBumps: Array<{
     productId: string;
     discount?: number;
