@@ -64,9 +64,7 @@ const formSchema = z.object({
     })
     .default("evaluation"),
 
-  educationalIds: z.string().optional(),
   courseId: z.string().optional(),
-  courseName: z.string().optional(),
 
   // Campos existentes
   image: z
@@ -138,14 +136,13 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       active: true,
       productType: "evaluation",
       courseId: "",
-      courseName: "",
-      educationalIds: "",
     },
     mode: "onChange",
   });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const watchImage = form.watch("image");
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const watchProductType = form.watch("productType");
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -482,75 +479,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     )}
                   />
 
-                  {/* Campos específicos para produtos educacionais */}
-                  {(watchProductType === "educational" ||
-                    watchProductType === "combo") && (
-                    <>
-                      <FormField
-                        control={form.control}
-                        name="courseId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>ID do Curso</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                disabled={loading}
-                                placeholder="ID do curso no portal educacional"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Identificador único do curso no sistema
-                              client-portal
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="courseName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nome do Curso</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                disabled={loading}
-                                placeholder="Nome do curso para referência"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Nome do curso para referência interna
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </>
-                  )}
-
-                  {/* Campos específicos para produtos combo */}
-                  {watchProductType === "combo" && (
+                  {/* Campo de ID do curso para produtos educacionais ou combo */}
+                  {(form.watch("productType") === "educational" ||
+                    form.watch("productType") === "combo") && (
                     <FormField
                       control={form.control}
-                      name="educationalIds"
+                      name="courseId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>
-                            IDs de Produtos Educacionais (Combo)
-                          </FormLabel>
+                          <FormLabel>ID do Curso</FormLabel>
                           <FormControl>
                             <Input
                               {...field}
                               disabled={loading}
-                              placeholder="IDs separados por vírgula (ex: id1,id2)"
+                              placeholder="ID do curso no portal educacional"
                             />
                           </FormControl>
                           <FormDescription>
-                            Para combos, informe os IDs dos cursos educacionais
-                            incluídos
+                            Identificador único do curso no sistema
+                            client-portal
                           </FormDescription>
                           <FormMessage />
                         </FormItem>

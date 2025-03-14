@@ -10,6 +10,8 @@ interface ProductFormValues {
   description: string;
   price: number;
   active: boolean;
+  productType: "evaluation" | "educational" | "combo";
+  courseId: string;
   orderBumps: Array<{
     productId: string;
     discount?: number;
@@ -46,6 +48,10 @@ export async function getProduct(
       description: product.description || "",
       price: product.prices[0]?.amount ? product.prices[0].amount / 100 : 0,
       active: product.active,
+      productType:
+        (product.productType as "evaluation" | "educational" | "combo") ||
+        "evaluation",
+      courseId: product.courseId || "",
       orderBumps: product.orderBumps.map((bump) => ({
         productId: bump.bumpProductId,
         discount: bump.discount || 0,
@@ -77,6 +83,8 @@ export async function updateProduct(id: string, data: ProductFormValues) {
         name: data.name,
         description: data.description,
         active: data.active,
+        productType: data.productType,
+        courseId: data.courseId,
         prices: {
           create: {
             amount: data.price,
@@ -126,6 +134,8 @@ export async function createProduct(data: ProductFormValues) {
         name: data.name,
         description: data.description,
         active: data.active,
+        productType: data.productType,
+        courseId: data.courseId,
         prices: {
           create: {
             amount: data.price,
