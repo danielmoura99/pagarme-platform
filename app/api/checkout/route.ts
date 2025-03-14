@@ -9,7 +9,14 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { product, customer, paymentMethod, cardData, affiliateRef } = body;
+    const {
+      product,
+      customer,
+      paymentMethod,
+      cardData,
+      affiliateRef,
+      selectedBumps,
+    } = body;
 
     console.log("Recebido request de checkout:", {
       product,
@@ -119,10 +126,34 @@ export async function POST(request: Request) {
     // 5. Criar transação na Pagar.me
     let transaction;
     const amount = body.totalAmount || dbProduct.prices[0].amount;
+
+    let orderBumpsInfo = null;
+    if (selectedBumps && selectedBumps.length > 0) {
+      // Buscar os produtos dos order bumps para obter seus nomes
+      const selectedBumpsData = await prisma.product.findMany({
+        where: {
+          id: {
+            in: selectedBumps,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+      orderBumpsInfo = {
+        ids: selectedBumps,
+        names: selectedBumpsData.map((bump) => bump.name),
+      };
+    }
+
     const metadata = {
       product_id: dbProduct.id,
       affiliate_id: affiliateRef || null,
       product_type: productType,
+      order_bumps: orderBumpsInfo ? JSON.stringify(orderBumpsInfo) : null,
+      has_order_bumps: selectedBumps && selectedBumps.length > 0 ? true : false,
     };
 
     if (paymentMethod === "credit_card") {
