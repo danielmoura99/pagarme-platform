@@ -330,6 +330,7 @@ export interface ProductDetails {
   name: string;
   description?: string;
   productType?: "evaluation" | "educational" | "combo";
+  courseId?: string;
 }
 
 export interface CreditCardPaymentOptions {

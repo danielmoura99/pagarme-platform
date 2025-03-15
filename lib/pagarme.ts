@@ -42,6 +42,7 @@ export class PagarmeClient {
     payment: PagarmePayment;
     metadata?: Record<string, unknown>;
     split?: SplitRule[];
+
     productDetails?: {
       name: string;
       description?: string;
@@ -88,7 +89,7 @@ export class PagarmeClient {
           ...params.metadata,
           product_name: params.productDetails?.name, // Adicionar ao metadata também
           product_description: params.productDetails?.description,
-          product_type: params.productDetails?.productType || "evaluation",
+          product_type: params.productDetails?.productType,
         },
       };
 
@@ -183,7 +184,7 @@ export class PagarmeClient {
       },
       metadata: {
         ...params.metadata,
-        product_type: params.productDetails?.productType || "evaluation", // Garantir que está no metadata também
+        product_type: params.productDetails?.productType, // Garantir que está no metadata também
       },
       split: params.split,
     });
@@ -247,7 +248,7 @@ export class PagarmeClient {
       },
       metadata: {
         ...params.metadata,
-        product_type: params.productDetails?.productType || "evaluation", // Garantir que está no metadata também
+        product_type: params.productDetails?.productType, // Garantir que está no metadata também
       },
       split: params.split,
     });

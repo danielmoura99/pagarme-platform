@@ -121,8 +121,8 @@ export async function POST(request: Request) {
       },
     };
 
-    const productType = dbProduct.productType || "evaluation";
-
+    const productType = dbProduct.productType;
+    const course_id = dbProduct.courseId || "vazio";
     // 5. Criar transação na Pagar.me
     let transaction;
     const amount = body.totalAmount || dbProduct.prices[0].amount;
@@ -139,12 +139,14 @@ export async function POST(request: Request) {
         select: {
           id: true,
           name: true,
+          courseId: true,
         },
       });
 
       orderBumpsInfo = {
         ids: selectedBumps,
         names: selectedBumpsData.map((bump) => bump.name),
+        courseIds: selectedBumpsData.map((bump) => bump.courseId),
       };
     }
 
@@ -154,6 +156,7 @@ export async function POST(request: Request) {
       product_type: productType,
       order_bumps: orderBumpsInfo ? JSON.stringify(orderBumpsInfo) : null,
       has_order_bumps: selectedBumps && selectedBumps.length > 0 ? true : false,
+      course_id: dbProduct.courseId || null,
     };
 
     if (paymentMethod === "credit_card") {
@@ -181,6 +184,7 @@ export async function POST(request: Request) {
           name: dbProduct.name, // Adicionando nome do produto
           description: dbProduct.description || undefined, // Adicionando descrição se existir
           productType: productType as "evaluation" | "educational" | "combo",
+          courseId: course_id,
         },
         cardData: {
           number: cardData.cardNumber.replace(/\D/g, ""),
@@ -195,6 +199,7 @@ export async function POST(request: Request) {
           product_name: dbProduct.name, // Adicionar ao metadata também
           product_description: dbProduct.description,
           productType: productType as "evaluation" | "educational" | "combo",
+          courseId: course_id,
         },
         split: splitRules,
       });
@@ -206,6 +211,7 @@ export async function POST(request: Request) {
           name: dbProduct.name, // Adicionando nome do produto
           description: dbProduct.description || undefined,
           productType: productType as "evaluation" | "educational" | "combo",
+          courseId: course_id,
         },
         expiresIn: 3600,
         metadata: {
@@ -213,6 +219,7 @@ export async function POST(request: Request) {
           product_name: dbProduct.name,
           product_description: dbProduct.description,
           productType: productType as "evaluation" | "educational" | "combo",
+          courseId: course_id,
         },
         split: splitRules,
       });
