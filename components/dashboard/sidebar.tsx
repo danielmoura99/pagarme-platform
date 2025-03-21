@@ -47,7 +47,7 @@ const userData = {
 const mainMenuItems = [
   {
     title: "Dashboard",
-    url: "/dashboard",
+    url: "/",
     icon: Home,
     disabled: false,
   },

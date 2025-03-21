@@ -220,16 +220,16 @@ export function DashboardMetrics() {
         value={metrics.totalTransactions.toString()}
         description="Pedidos finalizados no período"
         icon={<TrendingUp className="h-4 w-4" />}
-        trend={{ value: 12, isPositive: true }}
+        //trend={{ value: 12, isPositive: true }}
         theme="blue"
-        progressValue={85}
+        //progressValue={85}
       />
       <MetricCard
         title="Taxa de Conversão"
         value={`${metrics.conversionRate.toFixed(1)}%`}
         description="Checkout concluído vs. iniciado"
         icon={<Users className="h-4 w-4" />}
-        trend={{ value: 3.5, isPositive: true }}
+        // trend={{ value: 3.5, isPositive: true }}
         theme="green"
         progressValue={metrics.conversionRate}
       />
@@ -238,7 +238,7 @@ export function DashboardMetrics() {
         value={metrics.cardPayments.toString()}
         description="Transações via cartão"
         icon={<CreditCard className="h-4 w-4" />}
-        trend={{ value: 8, isPositive: true }}
+        // trend={{ value: 8, isPositive: true }}
         theme="purple"
         progressValue={cardProgress}
       />
@@ -247,7 +247,7 @@ export function DashboardMetrics() {
         value={metrics.pixPayments.toString()}
         description="Transações via PIX"
         icon={<QrCode className="h-4 w-4" />}
-        trend={{ value: 24, isPositive: true }}
+        // trend={{ value: 24, isPositive: true }}
         theme="amber"
         progressValue={pixProgress}
       />
