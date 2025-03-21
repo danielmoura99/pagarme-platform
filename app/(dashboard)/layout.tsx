@@ -1,27 +1,58 @@
 // app/(dashboard)/layout.tsx
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+"use client";
+
+import { useEffect, useState } from "react";
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/sidebar";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <SidebarProvider>
-      {/* Sidebar com Gradiente */}
-      <AppSidebar className="fixed left-0 w-64 h-screen z-30 bg-gradient-to-b from-gray-800 to-gray-900 text-gray-100 border-r border-gray-700" />
+  // Estado para detectar rolagem e aplicar sombra ao cabeçalho
+  const [scrolled, setScrolled] = useState(false);
 
-      {/* Conteúdo Principal Sem Header Fixo */}
-      <main className="flex-1 rounded-2xl">
+  // Detectar rolagem para aplicar efeitos visuais
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return (
+    <SidebarProvider defaultOpen={true}>
+      {/* Sidebar com estilo mais moderno */}
+      <AppSidebar variant="sidebar" />
+
+      {/* Conteúdo principal */}
+      <SidebarInset>
         {/* Trigger Mobile Flutuante */}
-        <div className="fixed top-2 left-2 z-40 md:hidden">
+        <div className="fixed top-4 left-4 z-40 md:hidden">
           <SidebarTrigger className="text-gray-300 hover:text-white bg-gray-700/50 backdrop-blur-sm rounded-lg p-2" />
         </div>
 
-        {/* Conteúdo Adaptado */}
-        <div className="p-4 lg:ml-64 mt-4">{children}</div>
-      </main>
+        {/* Conteúdo principal */}
+        <main className="min-h-screen bg-gray-50">
+          {/* Contêiner do conteúdo principal */}
+          <div
+            className={cn(
+              "transition-all duration-200",
+              scrolled ? "pt-16" : "pt-20"
+            )}
+          >
+            {children}
+          </div>
+        </main>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

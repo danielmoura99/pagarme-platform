@@ -31,7 +31,7 @@ export default async function RecipientsPage() {
     }));
 
     return (
-      <div className="container mx-3 py-8">
+      <div className="container mx-12 py-8">
         <div className="flex-1 space-y-4">
           <RecipientClient data={formattedRecipients} />
         </div>

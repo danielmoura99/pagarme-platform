@@ -15,9 +15,9 @@ export function DashboardContent() {
   };
 
   return (
-    <>
-      {/* Seletor de período */}
-      <div className="flex justify-end">
+    <div className="space-y-6 max-w-full">
+      {/* Seletor de período com alinhamento à direita */}
+      <div className="flex justify-end mb-2">
         <DateRangePicker value={dateRange} onChange={handleDateChange} />
       </div>
 
@@ -25,9 +25,9 @@ export function DashboardContent() {
       <DashboardMetrics />
 
       {/* Tabela de transações */}
-      <Card className="p-6">
+      <Card className="p-4 md:p-6 w-full">
         <TransactionsTable />
       </Card>
-    </>
+    </div>
   );
 }

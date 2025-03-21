@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ChevronDown } from "lucide-react";
 import { addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
@@ -26,6 +26,15 @@ interface DateRangePickerProps {
   value?: DateRange;
   onChange?: (range: { from: Date; to: Date }) => void;
 }
+
+const presets = [
+  { name: "Últimos 7 dias", value: "last7" },
+  { name: "Últimos 30 dias", value: "last30" },
+  { name: "Últimos 60 dias", value: "last60" },
+  { name: "Últimos 90 dias", value: "last90" },
+  { name: "Mês atual", value: "currentMonth" },
+  { name: "Mês anterior", value: "lastMonth" },
+];
 
 export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
   // Estado interno caso value não seja fornecido
@@ -98,8 +107,6 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
     }
   };
 
-  // Handler para quando o usuário seleciona uma data no calendário
-  // Handler para quando o usuário clica em uma data no calendário
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleCalendarSelect = (newDate: DateRange | any) => {
     // Implementação aprimorada do seletor de intervalo
@@ -142,20 +149,24 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
     // Não chamamos onChange aqui para evitar resetar o estado no componente pai
   };
 
+  // Formatação mais amigável das datas
+  const formattedDateRange =
+    selectedDate?.from && selectedDate?.to
+      ? `${format(selectedDate.from, "dd/MM/yyyy")} - ${format(selectedDate.to, "dd/MM/yyyy")}`
+      : "Selecione o período";
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
       <Select value={preset} onValueChange={handlePresetChange}>
-        <SelectTrigger className="w-[180px] h-8">
-          <SelectValue placeholder="Selecione um período" />
+        <SelectTrigger className="w-[180px] h-9 bg-white border-muted-foreground/20">
+          <SelectValue placeholder="Período pré-definido" />
         </SelectTrigger>
         <SelectContent className="bg-white">
-          <SelectItem value="last7">Últimos 7 dias</SelectItem>
-          <SelectItem value="last30">Últimos 30 dias</SelectItem>
-          <SelectItem value="last60">Últimos 60 dias</SelectItem>
-          <SelectItem value="last90">Últimos 90 dias</SelectItem>
-          <SelectItem value="lastyear">Último ano</SelectItem>
-          <SelectItem value="currentMonth">Mês atual</SelectItem>
-          <SelectItem value="lastMonth">Mês anterior</SelectItem>
+          {presets.map((preset) => (
+            <SelectItem key={preset.value} value={preset.value}>
+              {preset.name}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
 
@@ -164,23 +175,15 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
           <Button
             variant="outline"
             className={cn(
-              "justify-start text-left font-normal h-8",
+              "justify-between h-9 px-3 bg-white border-muted-foreground/20 w-full sm:w-auto min-w-[200px]",
               !selectedDate && "text-muted-foreground"
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {selectedDate?.from ? (
-              selectedDate.to ? (
-                <>
-                  {format(selectedDate.from, "dd/MM/yyyy")} -{" "}
-                  {format(selectedDate.to, "dd/MM/yyyy")}
-                </>
-              ) : (
-                format(selectedDate.from, "dd/MM/yyyy")
-              )
-            ) : (
-              <span>Selecione uma data</span>
-            )}
+            <div className="flex items-center">
+              <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+              <span>{formattedDateRange}</span>
+            </div>
+            <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0 bg-white" align="start">

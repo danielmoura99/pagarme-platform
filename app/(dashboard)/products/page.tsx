@@ -28,7 +28,7 @@ export default async function ProductsPage() {
   }));
 
   return (
-    <div className="container mx-3 py-8">
+    <div className="container mx-12 py-8">
       <div className="flex-1 space-y-4">
         <ProductClient data={formattedProducts} />
       </div>
