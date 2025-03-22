@@ -21,6 +21,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, CreditCard, QrCode } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TermsModal } from "@/components/modals/terms-modal";
 
 // Interfaces do Payload
 interface CheckoutPayloadBase {
@@ -118,6 +120,7 @@ export function CheckoutForm({
   const [paymentMethod, setPaymentMethod] = useState<"credit_card" | "pix">(
     "credit_card"
   );
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
@@ -182,6 +185,17 @@ export function CheckoutForm({
 
   const onSubmit = async (data: CheckoutFormValues) => {
     try {
+      // Verificar se os termos foram aceitos
+      if (!termsAccepted) {
+        toast({
+          variant: "destructive",
+          title: "Termos de uso",
+          description:
+            "Você precisa aceitar os termos e condições para continuar.",
+        });
+        return;
+      }
+
       console.log("Iniciando submissão do formulário...");
       setLoading(true);
 
@@ -479,10 +493,31 @@ export function CheckoutForm({
 
           {/* Botão e Informações */}
           <div className="space-y-4">
+            {/* Termos e Condições */}
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="terms"
+                checked={termsAccepted}
+                onCheckedChange={(checked) =>
+                  setTermsAccepted(checked as boolean)
+                }
+                className="mt-1"
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="terms"
+                  className="text-sm text-muted-foreground cursor-pointer"
+                >
+                  Declaro que li e concordo com os <TermsModal /> da Traders
+                  House.
+                </label>
+              </div>
+            </div>
+
             <Button
               type="submit"
               className="w-full h-10 font-medium"
-              disabled={loading || !form.formState.isValid}
+              disabled={loading || !form.formState.isValid || !termsAccepted}
             >
               {loading ? (
                 <>
@@ -494,15 +529,7 @@ export function CheckoutForm({
               )}
             </Button>
 
-            <div className="space-y-2 text-center">
-              <p className="text-sm text-muted-foreground">
-                Ao confirmar sua compra, você concorda com os{" "}
-                <a href="/termos" className="text-primary hover:underline">
-                  Termos de Uso
-                </a>{" "}
-                e Regulamento da Traders House.
-              </p>
-
+            <div className="text-center">
               <p className="text-xs text-muted-foreground/60">
                 Powered by PayStep, 2024.
               </p>
