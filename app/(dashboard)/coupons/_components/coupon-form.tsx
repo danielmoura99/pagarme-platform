@@ -48,7 +48,7 @@ const formSchema = z.object({
     .string()
     .min(3, "Código deve ter pelo menos 3 caracteres")
     .refine(
-      (str) => /^[A-Z0-9]+$/.test(str),
+      (str) => /^[A-Z0-9_]+$/.test(str),
       "Código deve conter apenas letras maiúsculas e números"
     ),
   active: z.boolean().default(true),
@@ -158,6 +158,8 @@ export function CouponForm({ initialData, products }: CouponFormProps) {
                       <FormControl>
                         <Input
                           {...field}
+                          value={field.value.toUpperCase()}
+                          onChange={(e) => field.onChange(e.target.value)}
                           disabled={loading}
                           placeholder="DESCONTO10"
                           className="uppercase"
