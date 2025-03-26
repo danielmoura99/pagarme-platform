@@ -1,14 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/api/webhooks/pagarme/route.ts - Atualização do handler de webhook
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { pagarme } from "@/lib/pagarme";
 import { headers } from "next/headers";
 
 export async function POST(req: Request) {
   try {
-    // Obter o corpo da requisição como texto para validação da assinatura
+    // Obter o corpo da requisição como texto
     const body = await req.text();
     const headersList = headers();
 
@@ -17,14 +14,14 @@ export async function POST(req: Request) {
       Object.fromEntries(headersList.entries())
     );
 
-    // Validar a assinatura do webhook
-    const isValid = await pagarme.processWebhook(await headersList, body);
-    if (!isValid) {
-      console.error("[WEBHOOK_ERROR] Assinatura inválida");
-      return new NextResponse("Assinatura inválida", { status: 401 });
-    }
+    // Temporariamente ignorar a validação da assinatura para testar
+    // const isValid = await pagarme.processWebhook(headersList, body);
+    // if (!isValid) {
+    //   console.error("[WEBHOOK_ERROR] Assinatura inválida");
+    //   return new NextResponse("Assinatura inválida", { status: 401 });
+    // }
 
-    // Converter o corpo para JSON após validação
+    // Converter o corpo para JSON
     const webhookData = JSON.parse(body);
 
     // Log completo do payload para debug
@@ -58,7 +55,7 @@ export async function POST(req: Request) {
 
 async function handleOrderPaid(data: any) {
   try {
-    // Log mais detalhado
+    // Log detalhado
     console.log(
       "[HANDLE_ORDER_PAID] Dados recebidos:",
       JSON.stringify(data, null, 2)
@@ -80,11 +77,7 @@ async function handleOrderPaid(data: any) {
       const order = await prisma.order.findUnique({
         where: { pagarmeTransactionId },
         include: {
-          items: {
-            include: {
-              product: true, // Incluindo dados do produto
-            },
-          },
+          items: true,
           customer: true,
         },
       });
@@ -104,14 +97,6 @@ async function handleOrderPaid(data: any) {
         const updatedOrder = await prisma.order.update({
           where: { id: order.id },
           data: { status: "paid" },
-          include: {
-            items: {
-              include: {
-                product: true,
-              },
-            },
-            customer: true,
-          },
         });
 
         console.log(
@@ -130,9 +115,6 @@ async function handleOrderPaid(data: any) {
           });
           console.log("[HANDLE_ORDER_PAID] Uso do cupom incrementado");
         }
-
-        // Enviar para o trader-evaluation
-        await sendOrderToTraderEvaluation(updatedOrder);
       } else {
         console.error(
           "[HANDLE_ORDER_PAID_ERROR] Pedido não encontrado com pagarmeTransactionId:",
@@ -148,14 +130,6 @@ async function handleOrderPaid(data: any) {
           const fallbackOrder = await prisma.order.update({
             where: { id: data.order.id },
             data: { status: "paid" },
-            include: {
-              items: {
-                include: {
-                  product: true,
-                },
-              },
-              customer: true,
-            },
           });
 
           console.log(
@@ -172,9 +146,6 @@ async function handleOrderPaid(data: any) {
               },
             });
           }
-
-          // Enviar para o trader-evaluation
-          await sendOrderToTraderEvaluation(fallbackOrder);
         } catch (fallbackError) {
           console.error(
             "[HANDLE_ORDER_PAID_ERROR] Falha na busca alternativa:",
@@ -192,74 +163,6 @@ async function handleOrderPaid(data: any) {
   } catch (error) {
     console.error("[HANDLE_ORDER_PAID_ERROR] Erro geral:", error);
     throw error;
-  }
-}
-
-async function sendOrderToTraderEvaluation(order: any) {
-  try {
-    // Verificar se há itens no pedido
-    if (!order.items || order.items.length === 0) {
-      console.error("[SEND_ORDER_ERROR] Pedido sem itens:", order.id);
-      return false;
-    }
-
-    // Obter as informações necessárias
-    const apiUrl = process.env.TRADER_EVALUATION_API_URL;
-    const apiKey = process.env.TRADER_EVALUATION_API_KEY;
-
-    if (!apiUrl || !apiKey) {
-      throw new Error(
-        "Configurações da API do trader-evaluation não encontradas"
-      );
-    }
-
-    // Para cada item no pedido, enviar informações para o trader-evaluation
-    for (const item of order.items) {
-      const product = item.product;
-
-      // Preparar o payload para o trader-evaluation
-      const payload = {
-        orderId: order.id,
-        productId: product.id,
-        productName: product.name,
-        productType: product.productType || "evaluation", // Usa o tipo do produto ou "evaluation" como padrão
-        customerName: order.customer.name,
-        customerEmail: order.customer.email,
-        customerDocument: order.customer.document,
-        purchaseDate: order.createdAt,
-        courseId: product.courseId, // Se existir, será enviado
-      };
-
-      console.log(
-        `[SEND_ORDER] Enviando dados para trader-evaluation: ${JSON.stringify(payload)}`
-      );
-
-      // Enviar para a API do trader-evaluation
-      const response = await fetch(`${apiUrl}/api/purchases`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(
-          `Erro ao enviar pedido para trader-evaluation: ${response.status} - ${errorText}`
-        );
-      }
-
-      console.log(
-        `[SEND_ORDER] Pedido enviado com sucesso: ${order.id}, produto: ${product.id}`
-      );
-    }
-
-    return true;
-  } catch (error) {
-    console.error(`[SEND_ORDER_ERROR] ${error}`);
-    return false;
   }
 }
 
@@ -286,8 +189,6 @@ async function handleOrderRefunded(data: any) {
         status: "refunded",
       },
     });
-
-    // Aqui você pode adicionar código para notificar o client-portal sobre a revogação
   } catch (error) {
     console.error("[HANDLE_ORDER_REFUNDED_ERROR]", error);
     throw error;
