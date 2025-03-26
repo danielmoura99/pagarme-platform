@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
     // Log completo do payload para debug
     console.log("[WEBHOOK_PAYLOAD]", JSON.stringify(webhookData, null, 2));
-    console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.order?.id);
+    console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.id);
 
     // Processar evento
     switch (webhookData.type) {
@@ -62,7 +62,7 @@ async function handleOrderPaid(data: any) {
     );
 
     // Verificar se temos o ID da transação
-    const pagarmeTransactionId = data.order?.id;
+    const pagarmeTransactionId = data.id;
     console.log("[HANDLE_ORDER_PAID] ID da transação:", pagarmeTransactionId);
 
     if (!pagarmeTransactionId) {
@@ -125,10 +125,10 @@ async function handleOrderPaid(data: any) {
         try {
           console.log(
             "[HANDLE_ORDER_PAID] Tentando busca alternativa pelo ID:",
-            data.order.id
+            data.id
           );
           const fallbackOrder = await prisma.order.update({
-            where: { id: data.order.id },
+            where: { id: data.id },
             data: { status: "paid" },
           });
 
@@ -170,7 +170,7 @@ async function handleOrderPaid(data: any) {
 async function handleOrderFailed(data: any) {
   try {
     await prisma.order.update({
-      where: { id: data.order.id },
+      where: { id: data.id },
       data: {
         status: "failed",
       },
@@ -184,7 +184,7 @@ async function handleOrderFailed(data: any) {
 async function handleOrderRefunded(data: any) {
   try {
     await prisma.order.update({
-      where: { id: data.order.id },
+      where: { id: data.id },
       data: {
         status: "refunded",
       },
@@ -198,7 +198,7 @@ async function handleOrderRefunded(data: any) {
 async function handleOrderPending(data: any) {
   try {
     await prisma.order.update({
-      where: { id: data.order.id },
+      where: { id: data.id },
       data: {
         status: "pending",
       },
