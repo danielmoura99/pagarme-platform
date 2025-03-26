@@ -4,11 +4,24 @@ import { ptBR } from "date-fns/locale";
 import { pagarme } from "@/lib/pagarme";
 import { RecipientClient } from "./_components/client";
 
+export const dynamic = "force-dynamic";
+
 export default async function RecipientsPage() {
   try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || ""}/api/recipients/all`,
+      {
+        cache: "no-store", // Evita caching
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch recipients: ${response.status}`);
+    }
+
     const recipients = await pagarme.listRecipients({
       status: "active",
-      size: 100,
+      size: 200,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
