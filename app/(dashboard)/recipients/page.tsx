@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function RecipientsPage() {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || ""}/api/recipients/all`,
+      `${process.env.NEXT_PUBLIC_API_URL || ""}/recipients/all`,
       {
         cache: "no-store", // Evita caching
       }
