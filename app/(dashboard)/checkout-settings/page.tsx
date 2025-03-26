@@ -41,7 +41,9 @@ async function getBannerSettings() {
       maxHeight: settings.headerMaxHeight || 350,
       verticalAlignment: alignment,
       enabled:
-        settings.headerEnabled !== undefined ? settings.headerEnabled : true,
+        settings.headerEnabled !== undefined
+          ? !!settings.headerEnabled // Converter para boolean com !!
+          : true, // Valor padrão se for undefined
     };
   } catch (error) {
     console.error("Erro ao buscar configurações do banner:", error);

@@ -8,7 +8,7 @@ type VerticalAlignment = "top" | "center" | "bottom";
 // Definir o tipo para corresponder ao que o BannerSettings espera
 type BannerFormValues = {
   maxHeight: number;
-  enabled: boolean;
+  enabled: boolean | null;
   verticalAlignment: VerticalAlignment;
   imageUrl?: string;
 };
@@ -25,6 +25,11 @@ interface BannerSettingsWrapperProps {
 export function BannerSettingsWrapper({
   initialValues,
 }: BannerSettingsWrapperProps) {
+  const safeInitialValues = {
+    ...initialValues,
+    enabled: initialValues.enabled !== null ? initialValues.enabled : true,
+  };
+
   // Atualizar a assinatura da função para corresponder ao esperado
   const handleSave = async (values: BannerFormValues): Promise<void> => {
     try {
@@ -67,5 +72,7 @@ export function BannerSettingsWrapper({
     }
   };
 
-  return <BannerSettings initialValues={initialValues} onSave={handleSave} />;
+  return (
+    <BannerSettings initialValues={safeInitialValues} onSave={handleSave} />
+  );
 }
