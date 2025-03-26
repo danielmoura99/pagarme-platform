@@ -1,3 +1,5 @@
+//schema local
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -74,6 +76,7 @@ model Order {
   affiliate            Affiliate? @relation(fields: [affiliateId], references: [id])
   coupon               Coupon?    @relation(fields: [couponId], references: [id])
   customer             Customer   @relation(fields: [customerId], references: [id])
+  items                OrderItem[] // Adicionar esta linha
 }
 
 model OrderBump {
@@ -96,6 +99,7 @@ model OrderItem {
   price     Int
   createdAt DateTime @default(now())
   product   Product  @relation(fields: [productId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id]) // Adicionar esta linha
 }
 
 model Affiliate {
