@@ -61,7 +61,7 @@ const mainMenuItems = [
     title: "Checkout",
     url: "/checkout-settings",
     icon: ShoppingCart,
-    disabled: true, // Desabilitado - em desenvolvimento
+    disabled: false,
   },
   {
     title: "Clientes",
