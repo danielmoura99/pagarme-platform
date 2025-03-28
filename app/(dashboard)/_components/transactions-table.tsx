@@ -42,7 +42,9 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  //SelectValue,
 } from "@/components/ui/select";
+import { TransactionDetailsModal } from "./transactions-details-modal";
 
 // Tipo para representar uma transação
 interface Transaction {
@@ -139,6 +141,12 @@ export function TransactionsTable() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const tableRef = useRef<HTMLDivElement>(null);
 
+  // Estado para o modal de detalhes da transação
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<
+    string | undefined
+  >(undefined);
+
   // Filtrar transações com base em múltiplos critérios
   const filteredTransactions = transactions
     .filter((transaction) => {
@@ -180,6 +188,12 @@ export function TransactionsTable() {
           return 0;
       }
     });
+
+  // Abrir o modal de detalhes da transação
+  const handleOpenTransactionDetails = (transactionId: string) => {
+    setSelectedTransactionId(transactionId);
+    setIsModalOpen(true);
+  };
 
   // Exportar para CSV
   const exportToCSV = () => {
@@ -507,7 +521,8 @@ export function TransactionsTable() {
                 {filteredTransactions.map((transaction) => (
                   <TableRow
                     key={transaction.id}
-                    className="hover:bg-muted/5 transition-colors"
+                    className="hover:bg-muted/5 transition-colors cursor-pointer"
+                    onClick={() => handleOpenTransactionDetails(transaction.id)}
                   >
                     <TableCell className="font-medium text-sm">
                       {transaction.orderId}
@@ -574,6 +589,13 @@ export function TransactionsTable() {
           </div>
         </Card>
       )}
+
+      {/* Modal de detalhes da transação */}
+      <TransactionDetailsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        transactionId={selectedTransactionId}
+      />
     </div>
   );
 }

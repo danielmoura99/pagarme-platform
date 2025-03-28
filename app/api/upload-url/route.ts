@@ -1,38 +1,56 @@
 // app/api/upload-url/route.ts
-
-export const dynamic = "force-dynamic";
-
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import { v4 as uuidv4 } from "uuid";
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: "Nenhum arquivo enviado" },
+        { status: 400 }
+      );
+    }
+
+    // Validar se é uma imagem
+    if (!file.type.startsWith("image/")) {
+      return NextResponse.json(
+        { error: "O arquivo deve ser uma imagem" },
+        { status: 400 }
+      );
+    }
+
     // Gerar um nome único para o arquivo
-    const uniqueId = uuidv4();
-    const fileName = `checkout-banners/${uniqueId}.jpg`;
+    const fileName = `checkout-banners/${Date.now()}-${file.name}`;
 
-    // Criar uma URL de upload
-    const result = await put(
-      fileName, // pathname
-      new Blob([]), // empty blob for multipart uploads
-      {
-        // options
-        access: "public",
-        multipart: true,
-      }
-    );
+    // Fazer upload para o Vercel Blob
+    const { url } = await put(fileName, file, {
+      access: "public",
+    });
 
-    // Retornar a URL de upload e a URL permanente do blob
     return NextResponse.json({
-      url: result.url, // URL para upload
-      blobUrl: result.url, // URL permanente
+      success: true,
+      url: url,
+      blobUrl: url,
     });
   } catch (error) {
-    console.error("Erro ao gerar URL de upload:", error);
+    console.error("Erro ao fazer upload:", error);
     return NextResponse.json(
-      { error: "Falha ao gerar URL de upload" },
+      {
+        error: "Erro ao processar o upload",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
+}
+
+// Este endpoint não precisa mais de uma versão GET
+export async function GET() {
+  return NextResponse.json(
+    { error: "Este endpoint só aceita requisições POST" },
+    { status: 405 }
+  );
 }

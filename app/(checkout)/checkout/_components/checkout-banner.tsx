@@ -1,4 +1,4 @@
-// app/(checkout)/_components/checkout-banner.tsx
+// app/(checkout)/checkout/_components/checkout-banner.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -17,7 +17,6 @@ export function CheckoutBanner({
   alt = "Banner promocional",
   maxHeight = 350, // Altura máxima do banner em px (ajustável)
   verticalAlignment = "center",
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   enabled = true,
 }: CheckoutBannerProps) {
   const [loaded, setLoaded] = useState(false);
@@ -36,6 +35,10 @@ export function CheckoutBanner({
     window.addEventListener("resize", updateWidth);
     return () => window.removeEventListener("resize", updateWidth);
   }, []);
+
+  if (!enabled || !imageUrl) {
+    return null;
+  }
 
   // Determinar a classe de posicionamento com base no alinhamento vertical
   const objectPositionClass = {

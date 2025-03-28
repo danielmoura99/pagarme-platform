@@ -82,31 +82,34 @@ export function BannerSettings({ initialValues, onSave }: BannerSettingsProps) {
     setUploadProgress(0);
 
     try {
-      // Criar uma URL de upload temporária
-      const response = await fetch("/api/upload-url");
-      const { url, blobUrl } = await response.json();
-
-      // Preparar o upload
-      const formData = new FormData();
-      formData.append("file", file);
-
       // Simular progresso durante o upload
       const interval = setInterval(() => {
         setUploadProgress((prev) => Math.min(prev + 5, 95));
       }, 100);
 
-      // Realizar o upload
-      await fetch(url, {
+      // Preparar o upload
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Enviar diretamente para nosso endpoint
+      const response = await fetch("/api/upload-url", {
         method: "POST",
         body: formData,
       });
 
+      // Parar a simulação de progresso
       clearInterval(interval);
+
+      if (!response.ok) {
+        throw new Error(`Upload falhou com status: ${response.status}`);
+      }
+
+      const result = await response.json();
       setUploadProgress(100);
 
       // Atualizar o formulário com a URL permanente do blob
-      form.setValue("imageUrl", blobUrl);
-      setPreviewUrl(blobUrl);
+      form.setValue("imageUrl", result.blobUrl);
+      setPreviewUrl(result.blobUrl);
 
       toast({
         title: "Upload concluído",

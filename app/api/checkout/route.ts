@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       cardData,
       affiliateRef,
       selectedBumps,
+      coupon,
     } = body;
 
     console.log("Recebido request de checkout:", {
@@ -23,6 +24,12 @@ export async function POST(request: Request) {
       customer,
       paymentMethod,
       affiliateRef,
+      couponInfo: coupon
+        ? {
+            code: coupon.code,
+            hasDiscount: !!coupon.discountPercentage,
+          }
+        : null,
     });
 
     // 1. Validar e buscar produto
@@ -44,6 +51,36 @@ export async function POST(request: Request) {
       return new NextResponse("Produto inválido ou preço alterado", {
         status: 400,
       });
+    }
+
+    let dbCoupon = null;
+    if (coupon && coupon.code) {
+      try {
+        dbCoupon = await prisma.coupon.findFirst({
+          where: {
+            code: coupon.code.toUpperCase(),
+            active: true,
+            products: {
+              some: {
+                id: product.id,
+              },
+            },
+          },
+        });
+
+        if (dbCoupon) {
+          console.log(
+            `[API] Cupom ${coupon.code} encontrado com ID: ${dbCoupon.id}`
+          );
+        } else {
+          console.log(
+            `[API] Cupom ${coupon.code} não encontrado no banco de dados`
+          );
+        }
+      } catch (couponError) {
+        console.error("[API] Erro ao buscar cupom:", couponError);
+        // Continuar sem o cupom em caso de erro
+      }
     }
 
     // 2. Verificar afiliado se existir
@@ -261,6 +298,7 @@ export async function POST(request: Request) {
       amount,
       paymentMethod,
       pagarmeTransactionId,
+      ...(dbCoupon ? { couponId: dbCoupon.id } : {}),
       items: {
         create: {
           productId: dbProduct.id,

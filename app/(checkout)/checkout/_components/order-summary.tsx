@@ -41,6 +41,9 @@ interface OrderSummaryProps {
   onInstallmentChange?: (installments: number, amount: number) => void;
   selectedBumps?: string[];
   onBumpSelect?: (bumpId: string, isSelected: boolean) => void;
+  onCouponApply?: (
+    coupon: { id: string; code: string; discountPercentage: number } | null
+  ) => void;
 }
 
 export function OrderSummary({
@@ -49,6 +52,7 @@ export function OrderSummary({
   paymentMethod,
   selectedBumps = [],
   onBumpSelect,
+  onCouponApply,
 }: OrderSummaryProps) {
   const [couponCode, setCouponCode] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
@@ -129,6 +133,11 @@ export function OrderSummary({
 
       const coupon = await response.json();
       setAppliedCoupon(coupon);
+
+      // Chamar o callback para informar o componente pai
+      if (onCouponApply) {
+        onCouponApply(coupon);
+      }
       toast({
         title: "Cupom aplicado!",
         description: `Desconto de ${coupon.discountPercentage}% aplicado.`,
@@ -140,6 +149,10 @@ export function OrderSummary({
         description: "Cupom inválido ou não aplicável a este produto.",
       });
       setAppliedCoupon(null);
+
+      if (onCouponApply) {
+        onCouponApply(null);
+      }
     } finally {
       setCouponLoading(false);
       setCouponCode("");
@@ -148,6 +161,10 @@ export function OrderSummary({
 
   const removeCoupon = () => {
     setAppliedCoupon(null);
+    if (onCouponApply) {
+      onCouponApply(null);
+    }
+
     toast({
       description: "Cupom removido.",
     });

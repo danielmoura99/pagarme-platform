@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckoutForm } from "./checkout-form";
 import { OrderSummary } from "./order-summary";
-//import { CheckoutBanner } from "./checkout-banner";
+import { CheckoutBanner } from "./checkout-banner";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -32,7 +32,6 @@ export default function CheckoutContent() {
   const affiliateRef = searchParams.get("ref");
 
   // Estado para armazenar as configurações do banner
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [bannerSettings, setBannerSettings] = useState<BannerSettings>({
     imageUrl: "",
     maxHeight: 350,
@@ -51,7 +50,7 @@ export default function CheckoutContent() {
             imageUrl: settings.headerBackgroundImage || "",
             maxHeight: settings.maxHeight || 350,
             verticalAlignment: settings.verticalAlignment || "center",
-            enabled: settings.enabled !== undefined ? settings.enabled : true,
+            enabled: settings.enabled !== undefined ? settings.enabled : false,
           });
         }
       } catch (error) {
@@ -62,6 +61,25 @@ export default function CheckoutContent() {
 
     fetchBannerSettings();
   }, []);
+
+  // 1. Adicionar estado para o cupom aplicado
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    id: string;
+    code: string;
+    discountPercentage: number;
+  } | null>(null);
+
+  // 2. Criar uma função para receber o cupom do OrderSummary
+  const handleCouponApply = (
+    coupon: {
+      id: string;
+      code: string;
+      discountPercentage: number;
+    } | null
+  ) => {
+    console.log("Cupom aplicado no CheckoutContent:", coupon);
+    setAppliedCoupon(coupon);
+  };
 
   useEffect(() => {
     const productId = searchParams.get("productId");
@@ -133,58 +151,61 @@ export default function CheckoutContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="max-w-4xl mx-auto px-4 py-8 lg:py-12">
-        <div className="text-center mb-8">
-          {/*<div className="max-w-4xl mx-auto px-4">
-        Banner dinâmico com as configurações carregadas
-        <CheckoutBanner
-          imageUrl={bannerSettings.imageUrl}
-          alt={`Banner promocional - ${product.name}`}
-          maxHeight={bannerSettings.maxHeight}
-          verticalAlignment={bannerSettings.verticalAlignment}
-          enabled={bannerSettings.enabled}
-        />
+      <div className="text-left mb-8">
+        <div className="max-w-4xl mx-auto px-4">
+          {/* Banner dinâmico com as configurações carregadas*/}
+          <CheckoutBanner
+            imageUrl={bannerSettings.imageUrl}
+            alt={`Banner promocional - ${product.name}`}
+            maxHeight={bannerSettings.maxHeight}
+            verticalAlignment={bannerSettings.verticalAlignment}
+            enabled={bannerSettings.enabled}
+          />
 
-        <div
-          className={`bg-white ${bannerSettings.enabled && bannerSettings.imageUrl ? "rounded-b-lg" : "rounded-lg"} shadow-lg overflow-hidden`}
-        >
-          <div className="text-center py-8 px-4"> 
-        <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>*/}
-          <h1 className="text-3xl font-bold text-gray-900">Finalizar Compra</h1>
-          <p className="text-gray-500 mt-2">
-            Complete suas informações para prosseguir
-          </p>
-        </div>
+          <div
+            className={`bg-white ${bannerSettings.enabled && bannerSettings.imageUrl ? "rounded-b-lg" : "rounded-lg"} shadow-lg overflow-hidden`}
+          >
+            <div className="text-center py-8 px-4">
+              <h1 className="text-3xl font-bold text-gray-900">
+                {/*{product.name}*/} Finalize sua compra
+              </h1>
+              <p className="text-gray-500 mt-2">
+                Complete suas informações para prosseguir
+              </p>
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start px-4 pb-8">
-          <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
-            <CheckoutForm
-              product={product}
-              selectedInstallments={selectedInstallments}
-              totalAmount={totalAmount}
-              onPaymentMethodChange={setPaymentMethod}
-              selectedBumps={selectedBumps}
-              affiliateRef={affiliateRef}
-            />
-          </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start px-4 pb-8">
+              <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
+                <CheckoutForm
+                  product={product}
+                  selectedInstallments={selectedInstallments}
+                  totalAmount={totalAmount}
+                  onPaymentMethodChange={setPaymentMethod}
+                  selectedBumps={selectedBumps}
+                  affiliateRef={affiliateRef}
+                  appliedCoupon={appliedCoupon}
+                />
+              </div>
 
-          <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
-            <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-              <OrderSummary
-                product={product}
-                paymentMethod={paymentMethod}
-                onInstallmentChange={(installments, amount) => {
-                  setSelectedInstallments(installments);
-                  setTotalAmount(amount);
-                }}
-                selectedBumps={selectedBumps}
-                onBumpSelect={handleBumpSelection}
-              />
-            </Suspense>
+              <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
+                <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+                  <OrderSummary
+                    product={product}
+                    paymentMethod={paymentMethod}
+                    onInstallmentChange={(installments, amount) => {
+                      setSelectedInstallments(installments);
+                      setTotalAmount(amount);
+                    }}
+                    selectedBumps={selectedBumps}
+                    onBumpSelect={handleBumpSelection}
+                    onCouponApply={handleCouponApply}
+                  />
+                </Suspense>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-    //</div>
   );
 }

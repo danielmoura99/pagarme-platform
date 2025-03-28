@@ -7,6 +7,11 @@ const nextConfig = {
         hostname: "api.pagar.me",
         pathname: "/core/v5/**",
       },
+      {
+        protocol: "https",
+        hostname: "**.public.blob.vercel-storage.com",
+        pathname: "**",
+      },
     ],
   },
 };
