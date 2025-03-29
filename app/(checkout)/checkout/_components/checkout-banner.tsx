@@ -49,7 +49,7 @@ export function CheckoutBanner({
 
   return (
     <div
-      className={`w-full overflow-hidden relative rounded-t-xl shadow-sm transition-opacity duration-300 ${
+      className={`w-full overflow-hidden relative shadow-sm transition-opacity duration-300 ${
         loaded ? "opacity-100" : "opacity-0"
       }`}
       style={{

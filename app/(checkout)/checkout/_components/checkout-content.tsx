@@ -150,31 +150,31 @@ export default function CheckoutContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="text-left mb-8">
-        <div className="max-w-4xl mx-auto px-4">
-          {/* Banner dinâmico com as configurações carregadas*/}
-          <CheckoutBanner
-            imageUrl={bannerSettings.imageUrl}
-            alt={`Banner promocional - ${product.name}`}
-            maxHeight={bannerSettings.maxHeight}
-            verticalAlignment={bannerSettings.verticalAlignment}
-            enabled={bannerSettings.enabled}
-          />
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6">
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+          {/* Banner condicionalmente renderizado */}
+          {bannerSettings.enabled && bannerSettings.imageUrl && (
+            <CheckoutBanner
+              imageUrl={bannerSettings.imageUrl}
+              alt={`Banner promocional - ${product.name}`}
+              maxHeight={bannerSettings.maxHeight}
+              verticalAlignment={bannerSettings.verticalAlignment}
+              enabled={bannerSettings.enabled}
+            />
+          )}
 
-          <div
-            className={`bg-white ${bannerSettings.enabled && bannerSettings.imageUrl ? "rounded-b-lg" : "rounded-lg"} shadow-lg overflow-hidden`}
-          >
-            <div className="text-center py-8 px-4">
+          <div className="px-4 py-8 lg:py-6">
+            <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-gray-900">
-                {/*{product.name}*/} Finalize sua compra
+                Finalizar Compra
               </h1>
               <p className="text-gray-500 mt-2">
                 Complete suas informações para prosseguir
               </p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start px-4 pb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
                 <CheckoutForm
                   product={product}
