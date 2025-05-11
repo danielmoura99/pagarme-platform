@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Copy, Check, QrCode, RefreshCw, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PixelProvider } from "@/components/tracking/pixel-provider";
 
 export default function ProcessingContent() {
   const router = useRouter();
@@ -127,91 +128,93 @@ export default function ProcessingContent() {
   })();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="max-w-md w-full p-6 space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="flex justify-center">
-            <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
-              <QrCode className="h-6 w-6 text-primary" />
+    <PixelProvider>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-6 space-y-6">
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <div className="flex justify-center">
+              <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                <QrCode className="h-6 w-6 text-primary" />
+              </div>
             </div>
-          </div>
-          <h1 className="text-2xl font-bold">Pagamento via PIX</h1>
-          <p className="text-sm text-muted-foreground">
-            Escaneie o QR Code ou copie e cole o código no seu app
-          </p>
-        </div>
-
-        <Separator />
-
-        {/* QR Code */}
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-lg border flex justify-center">
-            <div className="relative w-[200px] h-[200px]">
-              <Image
-                src={qrCodeUrl}
-                alt="QR Code PIX"
-                fill
-                className="object-contain"
-                priority
-              />
-            </div>
-          </div>
-
-          {/* Código PIX */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Código PIX</label>
-            <div className="flex gap-2">
-              <code className="flex-1 p-3 bg-muted rounded-lg text-xs break-all">
-                {qrCode}
-              </code>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleCopyPix}
-                className="shrink-0"
-              >
-                {copied ? (
-                  <Check className="h-4 w-4" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* Timer */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Tempo restante</span>
-            <span className="font-medium">{formatTimeLeft(timeLeft)}</span>
-          </div>
-          <Progress value={timeProgress} className="h-2" />
-        </div>
-
-        {/* Actions */}
-        <div className="space-y-4">
-          <Button
-            onClick={handleRefreshStatus}
-            disabled={isChecking}
-            className="w-full"
-          >
-            {isChecking ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Verificar pagamento
-          </Button>
-
-          <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
-            <p>
-              Após o pagamento, aguarde alguns instantes para a confirmação.
+            <h1 className="text-2xl font-bold">Pagamento via PIX</h1>
+            <p className="text-sm text-muted-foreground">
+              Escaneie o QR Code ou copie e cole o código no seu app
             </p>
           </div>
-        </div>
-      </Card>
-    </div>
+
+          <Separator />
+
+          {/* QR Code */}
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-lg border flex justify-center">
+              <div className="relative w-[200px] h-[200px]">
+                <Image
+                  src={qrCodeUrl}
+                  alt="QR Code PIX"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+            </div>
+
+            {/* Código PIX */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Código PIX</label>
+              <div className="flex gap-2">
+                <code className="flex-1 p-3 bg-muted rounded-lg text-xs break-all">
+                  {qrCode}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopyPix}
+                  className="shrink-0"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Timer */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Tempo restante</span>
+              <span className="font-medium">{formatTimeLeft(timeLeft)}</span>
+            </div>
+            <Progress value={timeProgress} className="h-2" />
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-4">
+            <Button
+              onClick={handleRefreshStatus}
+              disabled={isChecking}
+              className="w-full"
+            >
+              {isChecking ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Verificar pagamento
+            </Button>
+
+            <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+              <p>
+                Após o pagamento, aguarde alguns instantes para a confirmação.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </PixelProvider>
   );
 }

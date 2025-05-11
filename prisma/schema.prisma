@@ -32,6 +32,26 @@ model Customer {
   orders    Order[]
 }
 
+model PixelConfig {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  platform    String   // facebook, google_ads, google_analytics, tiktok, snapchat
+  pixelId    String   // ID do pixel na plataforma
+  enabled     Boolean  @default(true)
+  events      Json     // Array de eventos a rastrear ["PageView", "Purchase", etc]
+  customCode  String?  @db.Text // Código customizado se necessário
+  testMode    Boolean  @default(false) // Para testes sem disparar eventos reais
+  metadata    Json?    // Dados adicionais específicos da plataforma
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([productId, platform, pixelId]) // Evita duplicatas
+  @@index([productId])
+  @@index([platform])
+}
+
+
 model Product {
   id          String      @id @default(cuid())
   name        String
@@ -49,6 +69,7 @@ model Product {
   coupons     Coupon[]    @relation("CouponToProduct")
   splitConfigurationId String?
   splitConfiguration   SplitConfiguration? @relation(fields: [splitConfigurationId], references: [id])
+  pixelConfigs PixelConfig[]
 }
 
 model Price {
@@ -191,3 +212,5 @@ model SplitRecipient {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
+
+

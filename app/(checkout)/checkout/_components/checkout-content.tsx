@@ -9,6 +9,7 @@ import { OrderSummary } from "./order-summary";
 import { CheckoutBanner } from "./checkout-banner";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PixelProvider } from "@/components/tracking/pixel-provider";
 
 // Interface para as configurações do banner
 interface BannerSettings {
@@ -38,6 +39,14 @@ export default function CheckoutContent() {
     verticalAlignment: "center",
     enabled: false, // Inicialmente desabilitado até que as configurações sejam carregadas
   });
+
+  const pixelEventData = {
+    content_ids: [product?.id],
+    content_name: product?.name,
+    content_type: "product",
+    value: totalAmount / 100, // Converter para valor real
+    currency: "BRL",
+  };
 
   // Efeito para carregar as configurações do banner
   useEffect(() => {
@@ -150,62 +159,66 @@ export default function CheckoutContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Banner condicionalmente renderizado */}
-          {bannerSettings.enabled && bannerSettings.imageUrl && (
-            <CheckoutBanner
-              imageUrl={bannerSettings.imageUrl}
-              alt={`Banner promocional - ${product.name}`}
-              maxHeight={bannerSettings.maxHeight}
-              verticalAlignment={bannerSettings.verticalAlignment}
-              enabled={bannerSettings.enabled}
-            />
-          )}
+    <PixelProvider eventData={pixelEventData}>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            {/* Banner condicionalmente renderizado */}
+            {bannerSettings.enabled && bannerSettings.imageUrl && (
+              <CheckoutBanner
+                imageUrl={bannerSettings.imageUrl}
+                alt={`Banner promocional - ${product.name}`}
+                maxHeight={bannerSettings.maxHeight}
+                verticalAlignment={bannerSettings.verticalAlignment}
+                enabled={bannerSettings.enabled}
+              />
+            )}
 
-          <div className="px-4 py-8 lg:py-6">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-gray-900">
-                Finalizar Compra
-              </h1>
-              <p className="text-gray-500 mt-2">
-                Complete suas informações para prosseguir
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
-                <CheckoutForm
-                  product={product}
-                  selectedInstallments={selectedInstallments}
-                  totalAmount={totalAmount}
-                  onPaymentMethodChange={setPaymentMethod}
-                  selectedBumps={selectedBumps}
-                  affiliateRef={affiliateRef}
-                  appliedCoupon={appliedCoupon}
-                />
+            <div className="px-4 py-8 lg:py-6">
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-900">
+                  Finalizar Compra
+                </h1>
+                <p className="text-gray-500 mt-2">
+                  Complete suas informações para prosseguir
+                </p>
               </div>
 
-              <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
-                <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-                  <OrderSummary
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
+                  <CheckoutForm
                     product={product}
-                    paymentMethod={paymentMethod}
-                    onInstallmentChange={(installments, amount) => {
-                      setSelectedInstallments(installments);
-                      setTotalAmount(amount);
-                    }}
+                    selectedInstallments={selectedInstallments}
+                    totalAmount={totalAmount}
+                    onPaymentMethodChange={setPaymentMethod}
                     selectedBumps={selectedBumps}
-                    onBumpSelect={handleBumpSelection}
-                    onCouponApply={handleCouponApply}
+                    affiliateRef={affiliateRef}
+                    appliedCoupon={appliedCoupon}
                   />
-                </Suspense>
+                </div>
+
+                <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
+                  <Suspense
+                    fallback={<Skeleton className="h-[400px] w-full" />}
+                  >
+                    <OrderSummary
+                      product={product}
+                      paymentMethod={paymentMethod}
+                      onInstallmentChange={(installments, amount) => {
+                        setSelectedInstallments(installments);
+                        setTotalAmount(amount);
+                      }}
+                      selectedBumps={selectedBumps}
+                      onBumpSelect={handleBumpSelection}
+                      onCouponApply={handleCouponApply}
+                    />
+                  </Suspense>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </PixelProvider>
   );
 }
