@@ -47,8 +47,6 @@ model Product {
   orderItems  OrderItem[]
   prices      Price[]
   coupons     Coupon[]    @relation("CouponToProduct")
-  splitConfigurationId String?
-  splitConfiguration   SplitConfiguration? @relation(fields: [splitConfigurationId], references: [id])
 }
 
 model Price {
@@ -161,33 +159,3 @@ model CheckoutSettings {
   @@map("checkout_settings")
 }
 
-// Configuração de Split
-model SplitConfiguration {
-  id            String          @id @default(cuid())
-  name          String          // Nome descritivo para identificação
-  description   String?         // Descrição opcional
-  isActive      Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
-  // Relações
-  recipients    SplitRecipient[]
-  products      Product[]        // Produtos que usam esta configuração
-}
-
-// Recebedores individuais dentro de uma configuração
-model SplitRecipient {
-  id                  String   @id @default(cuid())
-  splitConfigurationId String
-  configuration       SplitConfiguration @relation(fields: [splitConfigurationId], references: [id], onDelete: Cascade)
-  
-  recipientId         String   // ID do recebedor na Pagar.me
-  recipientName       String?  // Nome do recebedor (para referência interna)
-  percentage          Float    // Porcentagem que este recebedor receberá
-  isLiable            Boolean  @default(false) // Se é responsável por chargebacks
-  chargeProcessingFee Boolean  @default(false) // Se paga taxas de processamento 
-  chargeRemainderFee  Boolean  @default(false) // Se paga taxas residuais
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-}
