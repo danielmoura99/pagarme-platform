@@ -16,15 +16,17 @@ import {
 } from "recharts";
 
 interface ChartData {
-  eventsByDay: Array<{
-    date: string;
-    total_events: number;
-    conversions: number;
-  }>;
-  eventsByType: Array<{
-    eventType: string;
-    count: number;
-  }>;
+  charts: {
+    eventsByDay: Array<{
+      date: string;
+      totalEvents: number;
+      conversions: number;
+    }>;
+    eventsByType: Array<{
+      eventType: string;
+      count: number;
+    }>;
+  };
 }
 
 export function ConversionChart() {
@@ -39,6 +41,8 @@ export function ConversionChart() {
     try {
       const response = await fetch("/api/analytics/pixels");
       const result = await response.json();
+
+      console.log("ConversionChart - Dados recebidos:", result);
       setData(result);
     } catch (error) {
       console.error("Failed to fetch chart data:", error);
@@ -64,59 +68,73 @@ export function ConversionChart() {
     );
   }
 
+  // Preparar dados para o gráfico de conversões por dia
+  const formattedDayData =
+    data?.charts?.eventsByDay?.map((item) => ({
+      date: new Date(item.date).toLocaleDateString("pt-BR", {
+        month: "short",
+        day: "numeric",
+      }),
+      "Total de Eventos": item.totalEvents,
+      Conversões: item.conversions,
+    })) || [];
+
+  // Preparar dados para o gráfico de eventos por tipo
+  const formattedTypeData =
+    data?.charts?.eventsByType?.map((item) => ({
+      eventType: item.eventType,
+      count: item.count,
+    })) || [];
+
+  console.log("ConversionChart - Dados formatados:", {
+    formattedDayData,
+    formattedTypeData,
+  });
+
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {/* Gráfico de Conversões por Dia */}
       <Card>
         <CardHeader>
-          <CardTitle>Conversões por Dia</CardTitle>
+          <CardTitle>Eventos por Dia</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <AreaChart
-              data={data?.eventsByDay?.reverse() || []}
-              margin={{
-                top: 5,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return date.toLocaleDateString("pt-BR", {
-                    month: "short",
-                    day: "numeric",
-                  });
+          {formattedDayData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart
+                data={formattedDayData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
                 }}
-              />
-              <YAxis />
-              <Tooltip
-                labelFormatter={(value) =>
-                  new Date(value).toLocaleDateString("pt-BR")
-                }
-              />
-              <Area
-                type="monotone"
-                dataKey="total_events"
-                stroke="#8884d8"
-                fill="#8884d8"
-                fillOpacity={0.3}
-                name="Total de Eventos"
-              />
-              <Area
-                type="monotone"
-                dataKey="conversions"
-                stroke="#82ca9d"
-                fill="#82ca9d"
-                fillOpacity={0.3}
-                name="Conversões"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Area
+                  type="monotone"
+                  dataKey="Total de Eventos"
+                  stroke="#8884d8"
+                  fill="#8884d8"
+                  fillOpacity={0.3}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="Conversões"
+                  stroke="#82ca9d"
+                  fill="#82ca9d"
+                  fillOpacity={0.3}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              Nenhum dado disponível
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -126,23 +144,29 @@ export function ConversionChart() {
           <CardTitle>Eventos por Tipo</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={data?.eventsByType || []}
-              margin={{
-                top: 5,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="eventType" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" fill="#8884d8" />
-            </BarChart>
-          </ResponsiveContainer>
+          {formattedTypeData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart
+                data={formattedTypeData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="eventType" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              Nenhum dado disponível
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -44,12 +44,22 @@ model PixelEventLog {
   sessionId     String?  // Para agrupar eventos da mesma sessão
   userAgent     String?
   ipAddress     String?
+
+  referrer      String?  // URL da página anterior
+  landingPage   String?  // Primeira página visitada na sessão
+  campaign      String?  // UTM campaign
+  source        String?  // UTM source (google, facebook, etc)
+  medium        String?  // UTM medium (cpc, organic, etc)
+  term          String?  // UTM term
+  content       String?  // UTM content
   
   createdAt     DateTime @default(now())
   
   @@index([pixelConfigId])
   @@index([eventType])
   @@index([createdAt])
+  @@index([source])
+  @@index([campaign])
 }
 
 model PixelConfig {

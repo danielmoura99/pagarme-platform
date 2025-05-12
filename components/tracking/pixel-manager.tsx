@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // components/tracking/pixel-manager.tsx
 "use client";
 
@@ -25,9 +24,11 @@ interface PixelManagerProps {
 
 export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   const pathname = usePathname();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const searchParams = useSearchParams();
   const initializedPixels = useRef<Set<string>>(new Set());
 
+  // Gerar ou recuperar session ID
   const getSessionId = () => {
     let sessionId = sessionStorage.getItem("pixel_session_id");
     if (!sessionId) {
@@ -35,6 +36,110 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       sessionStorage.setItem("pixel_session_id", sessionId);
     }
     return sessionId;
+  };
+
+  // Função para extrair parâmetros UTM e origem
+  const getTrafficSource = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionStorage = window.sessionStorage;
+
+    // Capturar UTM parameters
+    const utmSource =
+      urlParams.get("utm_source") || sessionStorage.getItem("utm_source");
+    const utmMedium =
+      urlParams.get("utm_medium") || sessionStorage.getItem("utm_medium");
+    const utmCampaign =
+      urlParams.get("utm_campaign") || sessionStorage.getItem("utm_campaign");
+    const utmTerm =
+      urlParams.get("utm_term") || sessionStorage.getItem("utm_term");
+    const utmContent =
+      urlParams.get("utm_content") || sessionStorage.getItem("utm_content");
+
+    // Salvar UTMs na sessão para persistir durante toda a navegação
+    if (urlParams.get("utm_source")) {
+      sessionStorage.setItem("utm_source", urlParams.get("utm_source")!);
+      sessionStorage.setItem("utm_medium", urlParams.get("utm_medium") || "");
+      sessionStorage.setItem(
+        "utm_campaign",
+        urlParams.get("utm_campaign") || ""
+      );
+      sessionStorage.setItem("utm_term", urlParams.get("utm_term") || "");
+      sessionStorage.setItem("utm_content", urlParams.get("utm_content") || "");
+    }
+
+    // Capturar landing page (primeira página da sessão)
+    const landingPage =
+      sessionStorage.getItem("landing_page") || window.location.href;
+    if (!sessionStorage.getItem("landing_page")) {
+      sessionStorage.setItem("landing_page", window.location.href);
+    }
+
+    // Detectar referrer orgânico vs paid
+    let source = utmSource;
+    let medium = utmMedium;
+
+    if (!source && document.referrer) {
+      const referrerHost = new URL(document.referrer).hostname;
+
+      // Identificar fontes comuns
+      if (referrerHost.includes("google")) {
+        source = "google";
+        medium = "organic";
+      } else if (referrerHost.includes("facebook")) {
+        source = "facebook";
+        medium = "social";
+      } else if (referrerHost.includes("instagram")) {
+        source = "instagram";
+        medium = "social";
+      } else {
+        source = referrerHost;
+        medium = "referral";
+      }
+    }
+
+    // Se não há referrer nem UTM, é tráfego direto
+    if (!source) {
+      source = "direct";
+      medium = "none";
+    }
+
+    return {
+      source,
+      medium,
+      campaign: utmCampaign,
+      term: utmTerm,
+      content: utmContent,
+      referrer: document.referrer || null,
+      landingPage: landingPage,
+    };
+  };
+
+  // Função para registrar eventos
+  const logPixelEvent = async (
+    pixelConfigId: string,
+    eventType: string,
+    eventData?: any,
+    orderId?: string
+  ) => {
+    try {
+      const trafficSource = getTrafficSource();
+
+      await fetch("/api/pixels/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pixelConfigId,
+          eventType,
+          eventData: eventData || {},
+          orderId,
+          sessionId: getSessionId(),
+          userAgent: navigator.userAgent,
+          ...trafficSource, // Incluir todos os dados de origem
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to log pixel event:", error);
+    }
   };
 
   // Carrega os pixels na primeira renderização
@@ -78,8 +183,11 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   // Rastreia eventos baseado na página atual
   useEffect(() => {
     const firePageViewEvent = () => {
-      pixels.forEach((pixel) => {
+      pixels.forEach(async (pixel) => {
         if (!pixel.enabled || !pixel.events.includes("PageView")) return;
+
+        // Log do evento
+        await logPixelEvent(pixel.id, "PageView", eventData);
 
         if (pixel.testMode) {
           console.log(`[PIXEL TEST MODE] PageView event:`, {
@@ -87,6 +195,7 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
             pixelId: pixel.pixelId,
             pathname,
             eventData,
+            trafficSource: getTrafficSource(),
           });
           return;
         }
@@ -115,50 +224,23 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     }
   }, [pathname, pixels, eventData]);
 
-  // Função para registrar eventos
-  const logPixelEvent = async (
-    pixelConfigId: string,
-    eventType: string,
-    eventData?: any,
-    orderId?: string
-  ) => {
-    try {
-      await fetch("/api/pixels/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pixelConfigId,
-          eventType,
-          eventData: eventData || {},
-          orderId,
-          sessionId: getSessionId(),
-          userAgent: navigator.userAgent,
-        }),
-      });
-    } catch (error) {
-      console.error("Failed to log pixel event:", error);
-    }
-  };
-
   const fireEvent = (eventName: string) => {
     pixels.forEach(async (pixel) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!pixel.enabled || !pixel.events.includes(eventName as any)) return;
+
+      // Log do evento sempre (mesmo em modo teste para analytics)
+      await logPixelEvent(pixel.id, eventName, eventData, eventData?.orderId);
 
       if (pixel.testMode) {
         console.log(`[PIXEL TEST MODE] ${eventName} event:`, {
           platform: pixel.platform,
           pixelId: pixel.pixelId,
           eventData,
+          trafficSource: getTrafficSource(),
         });
-        await logPixelEvent(pixel.id, eventName, eventData);
         return;
       }
 
-      // Log do evento real
-      await logPixelEvent(pixel.id, eventName, eventData);
-
-      // Disparar o evento nas plataformas
       switch (pixel.platform) {
         case "facebook":
           trackFacebookEvent(eventName, eventData);
