@@ -16,6 +16,7 @@ import { AlertModal } from "@/components/modals/alert-modal";
 import { useToast } from "@/hooks/use-toast";
 import { ProductColumn } from "./columns";
 import { discontinueProduct } from "../_actions";
+import { BarChart3 } from "lucide-react";
 
 interface CellActionProps {
   data: ProductColumn;
@@ -71,6 +72,11 @@ export function CellAction({ data }: CellActionProps) {
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
           <DropdownMenuItem onClick={onEdit}>
             <Edit className="mr-2 h-4 w-4" /> Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => router.push(`/products/${data.id}/pixels`)}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" /> Pixels de Rastreamento
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setOpen(true)}>
             <Trash className="mr-2 h-4 w-4" /> Descontinuar

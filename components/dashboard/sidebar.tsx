@@ -1,3 +1,4 @@
+//components/dashboard/sidebar.tsx
 "use client";
 
 import * as React from "react";
@@ -13,6 +14,7 @@ import {
   Settings,
   LogOut,
   Lock,
+  ChartColumnIncreasingIcon,
 } from "lucide-react";
 //import { NavUser } from "@/components/nav-user";
 import {
@@ -73,6 +75,12 @@ const mainMenuItems = [
     title: "Cupons",
     url: "/coupons",
     icon: Tag,
+    disabled: false,
+  },
+  {
+    title: "Analytics",
+    url: "/analytics",
+    icon: ChartColumnIncreasingIcon,
     disabled: false,
   },
 ];

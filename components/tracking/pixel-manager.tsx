@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // components/tracking/pixel-manager.tsx
 "use client";
@@ -14,6 +16,7 @@ import {
   trackGA4EcommerceEvent,
 } from "@/lib/tracking/google-analytics";
 import { PixelConfig, PixelEventData } from "@/lib/tracking/types";
+import { v4 as uuidv4 } from "uuid";
 
 interface PixelManagerProps {
   pixels: PixelConfig[];
@@ -24,6 +27,15 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const initializedPixels = useRef<Set<string>>(new Set());
+
+  const getSessionId = () => {
+    let sessionId = sessionStorage.getItem("pixel_session_id");
+    if (!sessionId) {
+      sessionId = uuidv4();
+      sessionStorage.setItem("pixel_session_id", sessionId);
+    }
+    return sessionId;
+  };
 
   // Carrega os pixels na primeira renderização
   useEffect(() => {
@@ -103,8 +115,33 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     }
   }, [pathname, pixels, eventData]);
 
+  // Função para registrar eventos
+  const logPixelEvent = async (
+    pixelConfigId: string,
+    eventType: string,
+    eventData?: any,
+    orderId?: string
+  ) => {
+    try {
+      await fetch("/api/pixels/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pixelConfigId,
+          eventType,
+          eventData: eventData || {},
+          orderId,
+          sessionId: getSessionId(),
+          userAgent: navigator.userAgent,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to log pixel event:", error);
+    }
+  };
+
   const fireEvent = (eventName: string) => {
-    pixels.forEach((pixel) => {
+    pixels.forEach(async (pixel) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!pixel.enabled || !pixel.events.includes(eventName as any)) return;
 
@@ -114,9 +151,14 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
           pixelId: pixel.pixelId,
           eventData,
         });
+        await logPixelEvent(pixel.id, eventName, eventData);
         return;
       }
 
+      // Log do evento real
+      await logPixelEvent(pixel.id, eventName, eventData);
+
+      // Disparar o evento nas plataformas
       switch (pixel.platform) {
         case "facebook":
           trackFacebookEvent(eventName, eventData);

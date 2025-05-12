@@ -81,7 +81,7 @@ export function PixelForm({ productId, initialData }: PixelFormProps) {
       };
 
       const url = initialData?.id
-        ? `/api/pixels/${initialData.id}`
+        ? `/api/pixels/manage/${initialData.id}`
         : "/api/pixels";
 
       const method = initialData?.id ? "PATCH" : "POST";

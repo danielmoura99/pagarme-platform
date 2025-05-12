@@ -11,12 +11,14 @@ interface PixelProviderProps {
   overrideProductId?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   eventData?: any;
+  orderId?: string;
 }
 
 export function PixelProvider({
   children,
   overrideProductId,
   eventData,
+  orderId,
 }: PixelProviderProps) {
   const searchParams = useSearchParams();
   const [pixelConfigs, setPixelConfigs] = useState<PixelConfig[]>([]);
@@ -41,10 +43,17 @@ export function PixelProvider({
     fetchPixelConfigs();
   }, [productId]);
 
+  const enrichedEventData = eventData
+    ? {
+        ...eventData,
+        orderId,
+      }
+    : undefined;
+
   return (
     <>
       {pixelConfigs.length > 0 && (
-        <PixelManager pixels={pixelConfigs} eventData={eventData} />
+        <PixelManager pixels={pixelConfigs} eventData={enrichedEventData} />
       )}
       {children}
     </>

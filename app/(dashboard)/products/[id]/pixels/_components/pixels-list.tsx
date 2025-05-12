@@ -63,7 +63,7 @@ export function PixelsList({ data, productId }: PixelsListProps) {
   const handleToggleEnabled = async (pixelId: string, enabled: boolean) => {
     try {
       setLoading(pixelId);
-      const response = await fetch(`/api/pixels/${pixelId}`, {
+      const response = await fetch(`/api/pixels/manage/${pixelId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled }),
@@ -87,7 +87,7 @@ export function PixelsList({ data, productId }: PixelsListProps) {
 
   const handleTestPixel = async (pixelId: string) => {
     try {
-      const response = await fetch(`/api/pixels/${pixelId}/test`, {
+      const response = await fetch(`/api/pixels/manage/${pixelId}/test`, {
         method: "POST",
       });
 
@@ -110,9 +110,12 @@ export function PixelsList({ data, productId }: PixelsListProps) {
 
     try {
       setLoading(deleteModal.pixelId);
-      const response = await fetch(`/api/pixels/${deleteModal.pixelId}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `/api/pixels/manage/${deleteModal.pixelId}`,
+        {
+          method: "DELETE",
+        }
+      );
 
       if (response.ok) {
         toast({

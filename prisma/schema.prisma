@@ -32,6 +32,26 @@ model Customer {
   orders    Order[]
 }
 
+model PixelEventLog {
+  id            String   @id @default(cuid())
+  pixelConfigId String
+  pixelConfig   PixelConfig @relation(fields: [pixelConfigId], references: [id], onDelete: Cascade)
+  
+  eventType     String   // "PageView", "Purchase", etc
+  eventData     Json?    // Dados do evento (valor, products, etc)
+  orderId       String?  // Referência opcional para conversões
+  
+  sessionId     String?  // Para agrupar eventos da mesma sessão
+  userAgent     String?
+  ipAddress     String?
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([pixelConfigId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
 model PixelConfig {
   id          String   @id @default(cuid())
   productId   String
@@ -45,6 +65,7 @@ model PixelConfig {
   metadata    Json?    // Dados adicionais específicos da plataforma
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  eventLogs PixelEventLog[]
 
   @@unique([productId, platform, pixelId]) // Evita duplicatas
   @@index([productId])
