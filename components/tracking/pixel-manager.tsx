@@ -180,46 +180,31 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     });
   }, [pixels]);
 
-  // Rastreia eventos baseado na página atual
+  // ✅ LÓGICA CORRIGIDA - Rastreamento apenas dos eventos principais
   useEffect(() => {
-    const firePageViewEvent = () => {
-      pixels.forEach(async (pixel) => {
-        if (!pixel.enabled || !pixel.events.includes("PageView")) return;
+    // 🟡 PageView e ViewContent em standby
+    // const firePageViewEvent = () => {
+    //   pixels.forEach(async (pixel) => {
+    //     if (!pixel.enabled || !pixel.events.includes("PageView")) return;
+    //     await logPixelEvent(pixel.id, "PageView", eventData);
+    //     if (pixel.testMode) {
+    //       console.log(`[PIXEL TEST MODE] PageView event:`, { /* ... */ });
+    //       return;
+    //     }
+    //     // ... disparo do evento
+    //   });
+    // };
 
-        // Log do evento
-        await logPixelEvent(pixel.id, "PageView", eventData);
+    // Dispara PageView quando a página muda (temporariamente desabilitado)
+    // firePageViewEvent();
 
-        if (pixel.testMode) {
-          console.log(`[PIXEL TEST MODE] PageView event:`, {
-            platform: pixel.platform,
-            pixelId: pixel.pixelId,
-            pathname,
-            eventData,
-            trafficSource: getTrafficSource(),
-          });
-          return;
-        }
-
-        switch (pixel.platform) {
-          case "facebook":
-            trackFacebookEvent("PageView");
-            break;
-          case "google_analytics":
-            // GA rastreia pageviews automaticamente
-            break;
-        }
-      });
-    };
-
-    // Dispara PageView quando a página muda
-    firePageViewEvent();
-
-    // Identifica eventos específicos baseado no pathname
+    // 🎯 EVENTOS PRINCIPAIS - LÓGICA CORRIGIDA:
+    // ✅ Página de checkout → InitiateCheckout
     if (pathname.includes("/checkout")) {
-      fireEvent("ViewContent");
-    } else if (pathname.includes("/processing")) {
       fireEvent("InitiateCheckout");
-    } else if (pathname.includes("/success")) {
+    }
+    // ✅ Página de sucesso → Purchase
+    else if (pathname.includes("/success")) {
       fireEvent("Purchase");
     }
   }, [pathname, pixels, eventData]);
@@ -264,17 +249,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
             });
           } else if (eventName === "InitiateCheckout") {
             trackGA4EcommerceEvent("begin_checkout", {
-              currency: eventData?.currency || "BRL",
-              value: eventData?.value,
-              items: eventData?.content_ids?.map((id, index) => ({
-                id,
-                name: eventData.content_name || `Product ${index + 1}`,
-                price: eventData.value || 0,
-                quantity: 1,
-              })),
-            });
-          } else if (eventName === "ViewContent") {
-            trackGA4EcommerceEvent("view_item", {
               currency: eventData?.currency || "BRL",
               value: eventData?.value,
               items: eventData?.content_ids?.map((id, index) => ({

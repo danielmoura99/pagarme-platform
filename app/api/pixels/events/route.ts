@@ -15,6 +15,14 @@ export async function POST(request: Request) {
       orderId,
       sessionId,
       userAgent,
+      // ✅ EXTRAIR CAMPOS DO TRAFFIC SOURCE
+      source,
+      medium,
+      campaign,
+      term,
+      content,
+      referrer,
+      landingPage,
     } = body;
 
     // Validar se o pixel existe
@@ -35,7 +43,7 @@ export async function POST(request: Request) {
       ? forwarded.split(",")[0]
       : headersList.get("x-real-ip");
 
-    // Registrar o evento
+    // ✅ REGISTRAR O EVENTO COM TODOS OS CAMPOS
     const pixelEventLog = await prisma.pixelEventLog.create({
       data: {
         pixelConfigId,
@@ -45,7 +53,26 @@ export async function POST(request: Request) {
         sessionId,
         userAgent,
         ipAddress,
+        // ✅ SALVAR TODOS OS CAMPOS DE TRAFFIC SOURCE
+        source,
+        medium,
+        campaign,
+        term,
+        content,
+        referrer,
+        landingPage,
       },
+    });
+
+    // Log para debug
+    console.log("[PIXEL_EVENT_SAVED]", {
+      id: pixelEventLog.id,
+      eventType,
+      source,
+      medium,
+      campaign,
+      referrer,
+      landingPage,
     });
 
     return NextResponse.json(pixelEventLog);
