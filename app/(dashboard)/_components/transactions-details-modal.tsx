@@ -23,11 +23,15 @@ import {
   Copy,
   Check,
   Clock,
+  AlertTriangle,
+  RotateCcw,
+  AlertCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Definição do tipo de Transação com todas as informações detalhadas
 interface TransactionDetails {
@@ -72,6 +76,38 @@ interface TransactionDetails {
     discountPercentage: number;
   };
   pagarmeTransactionId?: string;
+
+  failureReason?: string;
+  failureCode?: string;
+  attempts?: number;
+  lastAttemptAt?: string;
+  failureDetails?: {
+    method: string;
+    code?: string;
+    message?: string;
+
+    // ✅ DETALHES DO GATEWAY_RESPONSE
+    gatewayCode?: string;
+    gatewayErrors?: string[];
+
+    // Detalhes do Acquirer/Emissor
+    acquirerCode?: string;
+    acquirerMessage?: string;
+    responseCode?: string;
+
+    // Detalhes específicos de cartão
+    cardLastDigits?: string;
+    cardFlag?: string;
+    cardFirstDigits?: string;
+
+    // Detalhes específicos de PIX
+    pixExpiration?: string;
+
+    // Informações técnicas adicionais
+    installments?: number;
+    operationType?: string;
+    success?: boolean;
+  };
 }
 
 interface TransactionDetailsModalProps {
@@ -222,6 +258,152 @@ export function TransactionDetailsModal({
     );
   };
 
+  // ✅ COMPONENTE PARA EXIBIR INFORMAÇÕES DE FALHA
+  const FailureInfo = ({
+    transaction,
+  }: {
+    transaction: TransactionDetails;
+  }) => {
+    if (transaction.status !== "failed") return null;
+
+    return (
+      <div className="p-3 border rounded-lg border-red-200 bg-red-50">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-medium text-red-800 mb-2">
+              Informações da Falha
+            </h3>
+
+            <div className="space-y-2 text-sm">
+              {transaction.failureReason && (
+                <div>
+                  <span className="text-red-700 font-medium">Motivo: </span>
+                  <span className="text-red-600">
+                    {transaction.failureReason}
+                  </span>
+                </div>
+              )}
+
+              {transaction.failureCode && (
+                <div>
+                  <span className="text-red-700 font-medium">Código: </span>
+                  <code className="bg-red-100 px-1 py-0.5 rounded text-red-600">
+                    {transaction.failureCode}
+                  </code>
+                </div>
+              )}
+
+              {transaction.failureDetails && (
+                <div className="mt-3 p-2 bg-red-100 rounded text-xs space-y-1">
+                  <div className="font-medium text-red-800">
+                    Detalhes Técnicos:
+                  </div>
+
+                  {/* ✅ INFORMAÇÕES DO GATEWAY */}
+                  {transaction.failureDetails.gatewayCode && (
+                    <div>
+                      <span className="text-red-700">Código do Gateway: </span>
+                      <code className="text-red-600">
+                        {transaction.failureDetails.gatewayCode}
+                      </code>
+                    </div>
+                  )}
+
+                  {transaction.failureDetails.gatewayErrors &&
+                    transaction.failureDetails.gatewayErrors.length > 0 && (
+                      <div>
+                        <span className="text-red-700">Erros do Gateway: </span>
+                        <div className="ml-2">
+                          {transaction.failureDetails.gatewayErrors.map(
+                            (error, index) => (
+                              <div key={index} className="text-red-600">
+                                • {error}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* ✅ INFORMAÇÕES DO EMISSOR/ADQUIRENTE */}
+                  {transaction.failureDetails.acquirerMessage && (
+                    <div>
+                      <span className="text-red-700">
+                        Mensagem do Emissor:{" "}
+                      </span>
+                      <span className="text-red-600">
+                        {transaction.failureDetails.acquirerMessage}
+                      </span>
+                    </div>
+                  )}
+
+                  {transaction.failureDetails.acquirerCode && (
+                    <div>
+                      <span className="text-red-700">Código do Emissor: </span>
+                      <code className="text-red-600">
+                        {transaction.failureDetails.acquirerCode}
+                      </code>
+                    </div>
+                  )}
+
+                  {/* ✅ INFORMAÇÕES DO CARTÃO */}
+                  {transaction.failureDetails.cardFlag &&
+                    transaction.failureDetails.cardLastDigits && (
+                      <div>
+                        <span className="text-red-700">Cartão: </span>
+                        <span className="text-red-600">
+                          {transaction.failureDetails.cardFlag} ****
+                          {transaction.failureDetails.cardLastDigits}
+                          {transaction.failureDetails.cardFirstDigits &&
+                            ` (${transaction.failureDetails.cardFirstDigits}****)`}
+                        </span>
+                      </div>
+                    )}
+
+                  {/* ✅ INFORMAÇÕES ADICIONAIS */}
+                  {transaction.failureDetails.installments &&
+                    transaction.failureDetails.installments > 1 && (
+                      <div>
+                        <span className="text-red-700">Parcelamento: </span>
+                        <span className="text-red-600">
+                          {transaction.failureDetails.installments}x
+                        </span>
+                      </div>
+                    )}
+
+                  {transaction.failureDetails.operationType && (
+                    <div>
+                      <span className="text-red-700">Tipo Operação: </span>
+                      <span className="text-red-600">
+                        {transaction.failureDetails.operationType}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ✅ INFORMAÇÕES DE TENTATIVAS */}
+              {transaction.attempts && transaction.attempts > 1 && (
+                <div className="flex items-center gap-1 mt-2">
+                  <RotateCcw className="h-3 w-3 text-red-600" />
+                  <span className="text-red-600">
+                    {transaction.attempts} tentativa
+                    {transaction.attempts > 1 ? "s" : ""}
+                  </span>
+                  {transaction.lastAttemptAt && (
+                    <span className="text-red-500 text-xs">
+                      (última: {formatDate(transaction.lastAttemptAt)})
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
   // Exibir conteúdo baseado no estado de carregamento
   const renderContent = () => {
     if (loading) {
@@ -281,6 +463,16 @@ export function TransactionDetailsModal({
           </div>
         </div>
 
+        {/* ✅ ALERTA DE FALHA NO TOPO SE NECESSÁRIO */}
+        {transaction.status === "failed" && (
+          <Alert className="mb-4 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              Esta transação falhou. Veja os detalhes na aba Detalhes.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Tabs defaultValue="customer">
           <TabsList className="grid grid-cols-4 h-10">
             <TabsTrigger value="customer">
@@ -298,6 +490,9 @@ export function TransactionDetailsModal({
             <TabsTrigger value="details">
               <ClipboardList className="h-4 w-4 mr-2" />
               Detalhes
+              {transaction.status === "failed" && (
+                <div className="w-2 h-2 bg-red-500 rounded-full ml-1"></div>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -412,6 +607,9 @@ export function TransactionDetailsModal({
 
           <TabsContent value="details" className="p-4 space-y-4">
             <div className="space-y-4">
+              {/* ✅ MOSTRAR INFORMAÇÕES DE FALHA SE APLICÁVEL */}
+              <FailureInfo transaction={transaction} />
+
               {transaction.affiliate && (
                 <div className="p-3 border rounded-lg">
                   <h3 className="text-sm font-medium mb-2">Afiliado</h3>
@@ -459,6 +657,12 @@ export function TransactionDetailsModal({
               <Button variant="outline" size="sm" className="text-red-600">
                 <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
                 Reembolsar
+              </Button>
+            )}
+            {transaction.status === "failed" && (
+              <Button variant="outline" size="sm" className="text-blue-600">
+                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                Tentar Novamente
               </Button>
             )}
           </div>

@@ -14,13 +14,6 @@ export async function POST(req: Request) {
       Object.fromEntries(headersList.entries())
     );
 
-    // Temporariamente ignorar a validação da assinatura para testar
-    // const isValid = await pagarme.processWebhook(headersList, body);
-    // if (!isValid) {
-    //   console.error("[WEBHOOK_ERROR] Assinatura inválida");
-    //   return new NextResponse("Assinatura inválida", { status: 401 });
-    // }
-
     // Converter o corpo para JSON
     const webhookData = JSON.parse(body);
 
@@ -55,13 +48,11 @@ export async function POST(req: Request) {
 
 async function handleOrderPaid(data: any) {
   try {
-    // Log detalhado
     console.log(
       "[HANDLE_ORDER_PAID] Dados recebidos:",
       JSON.stringify(data, null, 2)
     );
 
-    // Verificar se temos o ID da transação
     const pagarmeTransactionId = data.id;
     console.log("[HANDLE_ORDER_PAID] ID da transação:", pagarmeTransactionId);
 
@@ -72,7 +63,6 @@ async function handleOrderPaid(data: any) {
       return;
     }
 
-    // Tentar encontrar o pedido pelo ID da transação
     try {
       const order = await prisma.order.findUnique({
         where: { pagarmeTransactionId },
@@ -93,10 +83,14 @@ async function handleOrderPaid(data: any) {
           order.id
         );
 
-        // Atualizar o status
+        // Atualizar o status e salvar resposta da Pagar.me
         const updatedOrder = await prisma.order.update({
           where: { id: order.id },
-          data: { status: "paid" },
+          data: {
+            status: "paid",
+            pagarmeResponse: data, // Salvar resposta completa
+            lastAttemptAt: new Date(),
+          },
         });
 
         console.log(
@@ -129,7 +123,11 @@ async function handleOrderPaid(data: any) {
           );
           const fallbackOrder = await prisma.order.update({
             where: { id: data.id },
-            data: { status: "paid" },
+            data: {
+              status: "paid",
+              pagarmeResponse: data,
+              lastAttemptAt: new Date(),
+            },
           });
 
           console.log(
@@ -166,15 +164,130 @@ async function handleOrderPaid(data: any) {
   }
 }
 
-// Outras funções de manipulação de webhooks existentes
+// ✅ FUNÇÃO MELHORADA PARA CAPTURAR DETALHES DA FALHA
 async function handleOrderFailed(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.id },
-      data: {
-        status: "failed",
-      },
+    console.log(
+      "[HANDLE_ORDER_FAILED] Dados da falha:",
+      JSON.stringify(data, null, 2)
+    );
+
+    // Extrair informações da falha
+    let failureReason = "Falha no pagamento";
+    let failureCode = "UNKNOWN";
+
+    // Tentar extrair o motivo da falha da resposta da Pagar.me
+    if (data.charges && data.charges[0]) {
+      const charge = data.charges[0];
+      const transaction = charge.last_transaction;
+
+      if (transaction) {
+        // ✅ CAPTURAR INFORMAÇÕES DO GATEWAY_RESPONSE
+        if (transaction.gateway_response) {
+          const gatewayResponse = transaction.gateway_response;
+
+          // Pegar código do gateway
+          if (gatewayResponse.code) {
+            failureCode = gatewayResponse.code;
+          }
+
+          // Pegar mensagem de erro do gateway
+          if (gatewayResponse.errors && gatewayResponse.errors.length > 0) {
+            const error = gatewayResponse.errors[0];
+            if (error.message) {
+              failureReason = error.message;
+
+              // Tentar extrair um código mais específico da mensagem
+              // Ex: "validation_error | customer | Invalid CPF" -> extrair "validation_error"
+              const messageParts = error.message.split(" | ");
+              if (messageParts.length > 0) {
+                failureCode = messageParts[0].toUpperCase();
+              }
+            }
+          }
+        }
+        // ✅ FALLBACK: Tentar outras fontes se gateway_response não tiver informações
+        else if (transaction.acquirer_message || transaction.reason) {
+          failureReason = transaction.acquirer_message || transaction.reason;
+          failureCode =
+            transaction.acquirer_return_code ||
+            transaction.response_code ||
+            "ACQUIRER_ERROR";
+        }
+        // ✅ IDENTIFICAR TIPO DE PAGAMENTO E APLICAR LÓGICAS ESPECÍFICAS
+        else {
+          // PIX
+          if (transaction.pix_qr_code && transaction.status === "failed") {
+            failureReason = transaction.reason || "PIX expirado ou falhou";
+            failureCode = transaction.acquirer_return_code || "PIX_FAILED";
+          }
+          // Cartão de crédito
+          else if (transaction.card) {
+            failureReason =
+              transaction.acquirer_message ||
+              transaction.reason ||
+              "Cartão negado";
+            failureCode =
+              transaction.acquirer_return_code ||
+              transaction.response_code ||
+              "CARD_DENIED";
+          }
+          // Outros métodos
+          else {
+            failureReason = transaction.reason || "Pagamento falhou";
+            failureCode = transaction.response_code || "PAYMENT_FAILED";
+          }
+        }
+      }
+    }
+
+    console.log("[HANDLE_ORDER_FAILED] Informações extraídas:", {
+      failureReason,
+      failureCode,
     });
+
+    // Buscar pedido por ID da transação Pagar.me
+    let order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId: data.id },
+    });
+
+    // Se não encontrar, tentar pelo ID direto
+    if (!order) {
+      order = await prisma.order.findUnique({
+        where: { id: data.id },
+      });
+    }
+
+    if (order) {
+      // Incrementar tentativas
+      const newAttempts = (order.attempts || 0) + 1;
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "failed",
+          failureReason,
+          failureCode,
+          pagarmeResponse: data, // Salvar resposta completa para análise
+          attempts: newAttempts,
+          lastAttemptAt: new Date(),
+        },
+      });
+
+      console.log(
+        `[HANDLE_ORDER_FAILED] Pedido ${order.id} atualizado como falhou:`,
+        {
+          failureReason,
+          failureCode,
+          attempts: newAttempts,
+        }
+      );
+    } else {
+      console.error(
+        "[HANDLE_ORDER_FAILED_ERROR] Pedido não encontrado:",
+        data.id
+      );
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_FAILED_ERROR]", error);
     throw error;
@@ -183,12 +296,34 @@ async function handleOrderFailed(data: any) {
 
 async function handleOrderRefunded(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.id },
-      data: {
-        status: "refunded",
-      },
+    console.log(
+      "[HANDLE_ORDER_REFUNDED] Dados do reembolso:",
+      JSON.stringify(data, null, 2)
+    );
+
+    // Buscar pelo ID da transação Pagar.me ou ID direto
+    let order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId: data.id },
     });
+
+    if (!order) {
+      order = await prisma.order.findUnique({
+        where: { id: data.id },
+      });
+    }
+
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "refunded",
+          pagarmeResponse: data,
+          lastAttemptAt: new Date(),
+        },
+      });
+
+      console.log(`[HANDLE_ORDER_REFUNDED] Pedido ${order.id} reembolsado`);
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_REFUNDED_ERROR]", error);
     throw error;
@@ -197,12 +332,34 @@ async function handleOrderRefunded(data: any) {
 
 async function handleOrderPending(data: any) {
   try {
-    await prisma.order.update({
-      where: { id: data.id },
-      data: {
-        status: "pending",
-      },
+    console.log(
+      "[HANDLE_ORDER_PENDING] Dados pendente:",
+      JSON.stringify(data, null, 2)
+    );
+
+    // Buscar pelo ID da transação Pagar.me ou ID direto
+    let order = await prisma.order.findUnique({
+      where: { pagarmeTransactionId: data.id },
     });
+
+    if (!order) {
+      order = await prisma.order.findUnique({
+        where: { id: data.id },
+      });
+    }
+
+    if (order) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: "pending",
+          pagarmeResponse: data,
+          lastAttemptAt: new Date(),
+        },
+      });
+
+      console.log(`[HANDLE_ORDER_PENDING] Pedido ${order.id} pendente`);
+    }
   } catch (error) {
     console.error("[HANDLE_ORDER_PENDING_ERROR]", error);
     throw error;

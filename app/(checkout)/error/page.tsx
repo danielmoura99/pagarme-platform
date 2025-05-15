@@ -41,10 +41,10 @@ export default async function ErrorPage({ searchParams }: Props) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Link href="/checkout">
+            <Link href="https://tradershouse.com.br/mesaproprietaria/">
               <Button className="w-full">Tentar novamente</Button>
             </Link>
-            <Link href="/support">
+            <Link href="https://api.whatsapp.com/send?phone=5562993776216">
               <Button variant="outline" className="w-full">
                 Contatar suporte
               </Button>
