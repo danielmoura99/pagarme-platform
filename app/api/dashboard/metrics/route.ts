@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       ? new Date(searchParams.get("to") as string)
       : new Date(); // Hoje
 
-    // Total de transações
+    // Total de transações (todos os status)
     const totalOrders = await prisma.order.count({
       where: {
         createdAt: {
@@ -22,7 +22,18 @@ export async function GET(request: Request) {
       },
     });
 
-    // Transações por método de pagamento
+    // Total de transações pagas
+    const paidOrders = await prisma.order.count({
+      where: {
+        createdAt: {
+          gte: fromDate,
+          lte: toDate,
+        },
+        status: "paid",
+      },
+    });
+
+    // Transações PAGAS por método de pagamento
     const cardPayments = await prisma.order.count({
       where: {
         createdAt: {
@@ -30,6 +41,7 @@ export async function GET(request: Request) {
           lte: toDate,
         },
         paymentMethod: "credit_card",
+        status: "paid", // Apenas pagas
       },
     });
 
@@ -40,32 +52,20 @@ export async function GET(request: Request) {
           lte: toDate,
         },
         paymentMethod: "pix",
+        status: "paid", // Apenas pagas
       },
     });
 
-    // Total de visitas ao checkout (assumindo que você tem essa informação)
-    // Se não tiver, você pode usar uma estimativa ou um valor fixo
-    const checkoutVisits = await prisma.order.count({
-      where: {
-        createdAt: {
-          gte: fromDate,
-          lte: toDate,
-        },
-        // Considerar todos os pedidos, mesmo os não concluídos
-        // Se você tem uma tabela de visitas de checkout, use-a aqui
-      },
-    });
-
-    // Calcular taxa de conversão
-    // Se não tiver dados de visitas, pode usar um valor fixo
+    // Calcular taxa de conversão: (transações pagas / total de transações) * 100
     const conversionRate =
-      checkoutVisits > 0 ? (totalOrders / checkoutVisits) * 100 : 0;
+      totalOrders > 0 ? (paidOrders / totalOrders) * 100 : 0;
 
     return NextResponse.json({
       totalTransactions: totalOrders,
+      paidTransactions: paidOrders,
       cardPayments,
       pixPayments,
-      conversionRate,
+      conversionRate: Number(conversionRate.toFixed(1)), // Arredondar para 1 casa decimal
     });
   } catch (error) {
     console.error("[DASHBOARD_METRICS_ERROR]", error);

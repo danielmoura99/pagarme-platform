@@ -7,7 +7,7 @@ import {
   CreditCard,
   QrCode,
   TrendingUp,
-  Users,
+  CheckCircle,
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
@@ -149,6 +149,7 @@ export function DashboardMetrics() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
     totalTransactions: 0,
+    paidTransactions: 0,
     conversionRate: 0,
     cardPayments: 0,
     pixPayments: 0,
@@ -177,6 +178,7 @@ export function DashboardMetrics() {
 
         setMetrics({
           totalTransactions: data.totalTransactions || 0,
+          paidTransactions: data.paidTransactions || 0,
           conversionRate: data.conversionRate || 0,
           cardPayments: data.cardPayments || 0,
           pixPayments: data.pixPayments || 0,
@@ -202,15 +204,15 @@ export function DashboardMetrics() {
     );
   }
 
-  // Calcular progresso relativo dos métodos de pagamento
-  const totalPayments = metrics.cardPayments + metrics.pixPayments;
+  // Calcular progresso relativo dos métodos de pagamento (apenas das pagas)
+  const totalPaidPayments = metrics.cardPayments + metrics.pixPayments;
   const cardProgress =
-    totalPayments > 0
-      ? Math.round((metrics.cardPayments / totalPayments) * 100)
+    totalPaidPayments > 0
+      ? Math.round((metrics.cardPayments / totalPaidPayments) * 100)
       : 0;
   const pixProgress =
-    totalPayments > 0
-      ? Math.round((metrics.pixPayments / totalPayments) * 100)
+    totalPaidPayments > 0
+      ? Math.round((metrics.pixPayments / totalPaidPayments) * 100)
       : 0;
 
   return (
@@ -218,36 +220,32 @@ export function DashboardMetrics() {
       <MetricCard
         title="Total de Transações"
         value={metrics.totalTransactions.toString()}
-        description="Pedidos finalizados no período"
+        description="Todas as transações do período"
         icon={<TrendingUp className="h-4 w-4" />}
-        //trend={{ value: 12, isPositive: true }}
         theme="blue"
-        //progressValue={85}
+        progressValue={100} // Sempre 100% pois representa o total
       />
       <MetricCard
         title="Taxa de Conversão"
-        value={`${metrics.conversionRate.toFixed(1)}%`}
-        description="Checkout concluído vs. iniciado"
-        icon={<Users className="h-4 w-4" />}
-        // trend={{ value: 3.5, isPositive: true }}
+        value={`${metrics.conversionRate}%`}
+        description={`${metrics.paidTransactions} de ${metrics.totalTransactions} foram efetivadas`}
+        icon={<CheckCircle className="h-4 w-4" />}
         theme="green"
         progressValue={metrics.conversionRate}
       />
       <MetricCard
         title="Cartão de Crédito"
         value={metrics.cardPayments.toString()}
-        description="Transações via cartão"
+        description="Transações pagas via cartão"
         icon={<CreditCard className="h-4 w-4" />}
-        // trend={{ value: 8, isPositive: true }}
         theme="purple"
         progressValue={cardProgress}
       />
       <MetricCard
         title="Pagamentos PIX"
         value={metrics.pixPayments.toString()}
-        description="Transações via PIX"
+        description="Transações pagas via PIX"
         icon={<QrCode className="h-4 w-4" />}
-        // trend={{ value: 24, isPositive: true }}
         theme="amber"
         progressValue={pixProgress}
       />

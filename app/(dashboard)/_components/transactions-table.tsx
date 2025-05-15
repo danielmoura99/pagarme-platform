@@ -21,6 +21,8 @@ import {
   ArrowUpDown,
   FileText,
   FileJson,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -56,6 +58,24 @@ interface Transaction {
   status: "pending" | "paid" | "failed" | "refunded";
   date: string;
   amount: number;
+}
+
+// Tipo para paginação
+interface PaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  limit: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  startItem: number;
+  endItem: number;
+}
+
+// Tipo para resposta da API
+interface TransactionsResponse {
+  transactions: Transaction[];
+  pagination: PaginationInfo;
 }
 
 // Componente para exibir o status da transação
@@ -134,6 +154,16 @@ export function TransactionsTable() {
   const { dateRange } = useDateRange();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+    limit: 50,
+    hasNextPage: false,
+    hasPreviousPage: false,
+    startItem: 1,
+    endItem: 0,
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
@@ -147,7 +177,66 @@ export function TransactionsTable() {
     string | undefined
   >(undefined);
 
-  // Filtrar transações com base em múltiplos critérios
+  // Função para buscar transações com paginação
+  const fetchTransactions = async (page = 1) => {
+    try {
+      setLoading(true);
+
+      const queryParams = new URLSearchParams({
+        from: dateRange.from.toISOString(),
+        to: dateRange.to.toISOString(),
+        page: page.toString(),
+        limit: pagination.limit.toString(),
+      });
+
+      const response = await fetch(
+        `/api/transactions?${queryParams.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch transactions");
+      }
+
+      const data: TransactionsResponse = await response.json();
+      setTransactions(data.transactions);
+      setPagination(data.pagination);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      setTransactions([]);
+      setPagination({
+        currentPage: 1,
+        totalPages: 1,
+        totalCount: 0,
+        limit: 50,
+        hasNextPage: false,
+        hasPreviousPage: false,
+        startItem: 1,
+        endItem: 0,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Navegação da paginação
+  const handlePreviousPage = () => {
+    if (pagination.hasPreviousPage) {
+      fetchTransactions(pagination.currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (pagination.hasNextPage) {
+      fetchTransactions(pagination.currentPage + 1);
+    }
+  };
+
+  // Resetar página quando filtros mudarem
+  useEffect(() => {
+    fetchTransactions(1);
+  }, [dateRange]); // Dependência do contexto
+
+  // Filtrar transações localmente (sem afetar paginação)
   const filteredTransactions = transactions
     .filter((transaction) => {
       // Filtragem por texto (cliente, produto ou ID do pedido)
@@ -280,37 +369,6 @@ export function TransactionsTable() {
       setSortDirection("desc"); // Padrão para nova coluna
     }
   };
-
-  useEffect(() => {
-    async function fetchTransactions() {
-      try {
-        setLoading(true);
-
-        const queryParams = new URLSearchParams({
-          from: dateRange.from.toISOString(),
-          to: dateRange.to.toISOString(),
-        });
-
-        const response = await fetch(
-          `/api/transactions?${queryParams.toString()}`
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch transactions");
-        }
-
-        const data = await response.json();
-        setTransactions(data);
-      } catch (error) {
-        console.error("Error fetching transactions:", error);
-        setTransactions([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchTransactions();
-  }, [dateRange]);
 
   // Renderiza cabeçalho de coluna ordenável
   const renderSortableHeader = (title: string, column: string) => (
@@ -572,18 +630,40 @@ export function TransactionsTable() {
             </Table>
           </div>
 
-          {/* Resumo dos resultados e paginação */}
-          <div className="px-4 py-2 border-t border-gray-100 flex justify-between items-center text-xs text-muted-foreground">
-            <div>
-              Exibindo {filteredTransactions.length} de {transactions.length}{" "}
-              transações
+          {/* Paginação e resumo dos resultados */}
+          <div className="px-4 py-3 border-t border-gray-100 flex justify-between items-center text-sm">
+            <div className="text-muted-foreground">
+              Exibindo {pagination.startItem} - {pagination.endItem} de{" "}
+              {pagination.totalCount} transações
+              {filteredTransactions.length !== transactions.length && (
+                <span className="text-blue-600 ml-1">
+                  ({filteredTransactions.length} filtradas)
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" className="h-7 px-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Página {pagination.currentPage} de {pagination.totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3"
+                onClick={handlePreviousPage}
+                disabled={!pagination.hasPreviousPage || loading}
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
                 Anterior
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 px-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-3"
+                onClick={handleNextPage}
+                disabled={!pagination.hasNextPage || loading}
+              >
                 Próxima
+                <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>

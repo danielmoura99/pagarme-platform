@@ -12,13 +12,27 @@ export async function GET(request: Request) {
       ? new Date(searchParams.get("to") as string)
       : new Date(); // Hoje
 
-    const orders = await prisma.order.findMany({
-      where: {
-        createdAt: {
-          gte: fromDate,
-          lte: toDate,
-        },
+    // Parâmetros de paginação
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
+    const skip = (page - 1) * limit;
+
+    // Where clause para filtros
+    const whereClause = {
+      createdAt: {
+        gte: fromDate,
+        lte: toDate,
       },
+    };
+
+    // Contar total de transações (para calcular total de páginas)
+    const totalCount = await prisma.order.count({
+      where: whereClause,
+    });
+
+    // Buscar transações com paginação
+    const orders = await prisma.order.findMany({
+      where: whereClause,
       include: {
         customer: true,
         items: {
@@ -30,7 +44,8 @@ export async function GET(request: Request) {
       orderBy: {
         createdAt: "desc",
       },
-      take: 50, // Limitar para não sobrecarregar
+      skip,
+      take: limit,
     });
 
     // Transformar os dados para o formato esperado pela UI
@@ -49,7 +64,24 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json(transactions);
+    // Calcular informações de paginação
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
+    return NextResponse.json({
+      transactions,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount,
+        limit,
+        hasNextPage,
+        hasPreviousPage,
+        startItem: skip + 1,
+        endItem: Math.min(skip + limit, totalCount),
+      },
+    });
   } catch (error) {
     console.error("[TRANSACTIONS_ERROR]", error);
     return NextResponse.json(
