@@ -23,6 +23,7 @@ import { Loader2, CreditCard, QrCode } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TermsModal } from "@/components/modals/terms-modal";
+import { useRef } from "react";
 
 // Interfaces do Payload
 interface CheckoutPayloadBase {
@@ -114,7 +115,7 @@ interface CheckoutFormProps {
 
 export function CheckoutForm({
   product,
-  selectedInstallments, // valor padrão de 1
+  selectedInstallments,
   totalAmount,
   onPaymentMethodChange,
   selectedBumps = [],
@@ -127,6 +128,8 @@ export function CheckoutForm({
     "credit_card"
   );
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const checkoutIdRef = useRef<string>(crypto.randomUUID());
 
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
@@ -201,9 +204,17 @@ export function CheckoutForm({
         });
         return;
       }
+      // Se já está em processo de submissão, impedir nova tentativa
+      if (isSubmitting) {
+        console.log(
+          "Formulário já está sendo enviado, ignorando clique duplicado"
+        );
+        return;
+      }
 
       console.log("Iniciando submissão do formulário...");
       setLoading(true);
+      setIsSubmitting(true); // Bloqueio adicional
 
       // Validar se o produto tem preço
       if (!product.prices || product.prices.length === 0) {
@@ -228,6 +239,7 @@ export function CheckoutForm({
         totalAmount: totalAmount || product.prices[0].amount,
         affiliateRef,
         coupon: appliedCoupon,
+        checkoutId: checkoutIdRef.current,
         // Se for cartão, incluir os dados
         ...(paymentMethod === "credit_card" && {
           cardData: {
@@ -242,6 +254,7 @@ export function CheckoutForm({
       console.log("[Checkout] Enviando pagamento:", {
         method: payload.paymentMethod,
         amount: payload.product.price,
+        checkoutId: payload.checkoutId,
         hasCoupon: !!payload.coupon,
       });
 
@@ -284,6 +297,7 @@ export function CheckoutForm({
             ? error.message
             : "Erro ao processar pagamento",
       });
+      setIsSubmitting(false);
     } finally {
       setLoading(false);
     }
@@ -525,7 +539,12 @@ export function CheckoutForm({
             <Button
               type="submit"
               className="w-full h-10 font-medium"
-              disabled={loading || !form.formState.isValid || !termsAccepted}
+              disabled={
+                loading ||
+                !form.formState.isValid ||
+                !termsAccepted ||
+                isSubmitting
+              }
             >
               {loading ? (
                 <>

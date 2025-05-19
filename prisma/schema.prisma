@@ -127,6 +127,7 @@ model Order {
   couponId             String?
   splitAmount          Float?
   pagarmeTransactionId String?    @unique
+  checkoutId           String?
   affiliate            Affiliate? @relation(fields: [affiliateId], references: [id])
   coupon               Coupon?    @relation(fields: [couponId], references: [id])
   customer             Customer   @relation(fields: [customerId], references: [id])
@@ -136,6 +137,8 @@ model Order {
   pagarmeResponse   Json?     // Resposta completa da Pagar.me (para análise)
   attempts          Int       @default(1) // Número de tentativas
   lastAttemptAt     DateTime? // Timestamp da última tentativa
+
+  @@index([checkoutId])
 }
 
 model OrderBump {

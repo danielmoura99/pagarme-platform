@@ -140,7 +140,69 @@ export async function POST(request: Request) {
       affiliateRef,
       selectedBumps,
       coupon,
+      checkoutId,
     } = body;
+
+    // Verificar se já existe uma transação com este checkoutId
+    if (checkoutId) {
+      const existingOrder = await prisma.order.findFirst({
+        where: {
+          checkoutId,
+          createdAt: {
+            // Buscar apenas nas últimas 2 horas
+            gte: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          },
+        },
+      });
+
+      if (existingOrder) {
+        console.log(
+          `[CHECKOUT] Tentativa duplicada detectada. checkoutId: ${checkoutId}, orderId: ${existingOrder.id}`
+        );
+
+        // Retornar a mesma resposta que retornaríamos no fluxo normal
+        if (paymentMethod === "pix") {
+          // Se tiver os dados do PIX na resposta da Pagar.me, extraí-los
+          // Fazer parse do pagarmeResponse se for uma string
+          let parsedResponse;
+          try {
+            parsedResponse =
+              typeof existingOrder.pagarmeResponse === "string"
+                ? JSON.parse(existingOrder.pagarmeResponse)
+                : existingOrder.pagarmeResponse;
+          } catch (e) {
+            console.error(
+              "[CHECKOUT] Erro ao fazer parse do pagarmeResponse:",
+              e
+            );
+            parsedResponse = {};
+          }
+
+          const pixData = parsedResponse?.charges?.[0]?.last_transaction;
+
+          return NextResponse.json({
+            success: true,
+            orderId: existingOrder.id,
+            isDuplicate: true,
+            qrCode: pixData?.qr_code || "",
+            qrCodeUrl: pixData?.qr_code_url || "",
+            expiresAt: pixData?.expires_at || new Date().toISOString(),
+            status: existingOrder.status,
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          orderId: existingOrder.id,
+          status: existingOrder.status,
+          isDuplicate: true,
+        });
+      }
+    } else {
+      console.warn(
+        "[CHECKOUT] Requisição sem checkoutId, continuando sem proteção de idempotência"
+      );
+    }
 
     console.log("Recebido request de checkout:", {
       product,
@@ -617,6 +679,7 @@ export async function POST(request: Request) {
       amount,
       paymentMethod: paymentMethod as string,
       pagarmeTransactionId,
+      checkoutId,
       pagarmeResponse: JSON.parse(JSON.stringify(pagarmeResponse)),
       attempts: 1,
       lastAttemptAt: new Date(),
