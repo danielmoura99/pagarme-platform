@@ -404,7 +404,7 @@ export function CheckoutForm({
               <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm">
                 2
               </span>
-              <h2 className="text-lg font-semibold">Pagamento</h2>
+              <h2 className="text-lg ">Pagamento</h2>
             </div>
 
             <Tabs

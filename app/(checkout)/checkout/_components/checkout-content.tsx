@@ -6,17 +6,24 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckoutForm } from "./checkout-form";
 import { OrderSummary } from "./order-summary";
-import { CheckoutBanner } from "./checkout-banner";
+import { ResponsiveCheckoutBanner } from "./responsive-checkout-banner";
+import { SidebarBanner } from "./sidebar-banner";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PixelProvider } from "@/components/tracking/pixel-provider";
 
-// Interface para as configurações do banner
+// Interface para as configurações dos banners
 interface BannerSettings {
-  imageUrl: string;
-  maxHeight: number;
-  verticalAlignment: "top" | "center" | "bottom";
-  enabled: boolean;
+  // Banner principal (header)
+  headerEnabled: boolean;
+  headerDesktopImage: string;
+  headerMobileImage: string;
+  headerMaxHeight: number;
+  headerVerticalAlignment: "top" | "center" | "bottom";
+
+  // Banner lateral (sidebar)
+  sidebarEnabled: boolean;
+  sidebarImage: string;
 }
 
 export default function CheckoutContent() {
@@ -32,53 +39,61 @@ export default function CheckoutContent() {
   const [selectedBumps, setSelectedBumps] = useState<string[]>([]);
   const affiliateRef = searchParams.get("ref");
 
-  // Estado para armazenar as configurações do banner
+  // Estado para armazenar as configurações dos banners
   const [bannerSettings, setBannerSettings] = useState<BannerSettings>({
-    imageUrl: "",
-    maxHeight: 350,
-    verticalAlignment: "center",
-    enabled: false, // Inicialmente desabilitado até que as configurações sejam carregadas
+    headerEnabled: false,
+    headerDesktopImage: "",
+    headerMobileImage: "",
+    headerMaxHeight: 350,
+    headerVerticalAlignment: "center",
+    sidebarEnabled: false,
+    sidebarImage: "",
   });
 
   const pixelEventData = {
     content_ids: [product?.id],
     content_name: product?.name,
     content_type: "product",
-    value: totalAmount / 100, // Converter para valor real
+    value: totalAmount / 100,
     currency: "BRL",
   };
 
-  // Efeito para carregar as configurações do banner
+  // Efeito para carregar as configurações dos banners
   useEffect(() => {
     const fetchBannerSettings = async () => {
       try {
-        const response = await fetch("/api/checkout-settings/banner");
+        const response = await fetch("/api/checkout-settings/banners");
         if (response.ok) {
           const settings = await response.json();
           setBannerSettings({
-            imageUrl: settings.headerBackgroundImage || "",
-            maxHeight: settings.maxHeight || 350,
-            verticalAlignment: settings.verticalAlignment || "center",
-            enabled: settings.enabled !== undefined ? settings.enabled : false,
+            // Banner principal
+            headerEnabled: settings.headerEnabled ?? false,
+            headerDesktopImage: settings.headerBackgroundImage || "",
+            headerMobileImage: settings.headerMobileImage || "",
+            headerMaxHeight: settings.headerMaxHeight || 350,
+            headerVerticalAlignment: settings.headerVerticalAlign || "center",
+
+            // Banner lateral
+            sidebarEnabled: settings.sidebarBannerEnabled ?? false,
+            sidebarImage: settings.sidebarBannerImage || "",
           });
         }
       } catch (error) {
-        console.error("Erro ao carregar configurações do banner:", error);
-        // Manter as configurações padrão em caso de erro
+        console.error("Erro ao carregar configurações dos banners:", error);
       }
     };
 
     fetchBannerSettings();
   }, []);
 
-  // 1. Adicionar estado para o cupom aplicado
+  // Estado para o cupom aplicado
   const [appliedCoupon, setAppliedCoupon] = useState<{
     id: string;
     code: string;
     discountPercentage: number;
   } | null>(null);
 
-  // 2. Criar uma função para receber o cupom do OrderSummary
+  // Função para receber o cupom do OrderSummary
   const handleCouponApply = (
     coupon: {
       id: string;
@@ -161,59 +176,78 @@ export default function CheckoutContent() {
   return (
     <PixelProvider eventData={pixelEventData}>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            {/* Banner condicionalmente renderizado */}
-            {bannerSettings.enabled && bannerSettings.imageUrl && (
-              <CheckoutBanner
-                imageUrl={bannerSettings.imageUrl}
-                alt={`Banner promocional - ${product.name}`}
-                maxHeight={bannerSettings.maxHeight}
-                verticalAlignment={bannerSettings.verticalAlignment}
-                enabled={bannerSettings.enabled}
-              />
-            )}
+        {/* Container principal com largura máxima para desktop */}
+        <div className="max-w-7xl mx-auto px-4">
+          {/* Layout principal - Grid com espaço para sidebar */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Coluna principal do checkout */}
+            <div className="lg:col-span-8 order-2 lg:order-1">
+              <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                {/* Banner principal responsivo */}
+                <ResponsiveCheckoutBanner
+                  desktopImageUrl={bannerSettings.headerDesktopImage}
+                  mobileImageUrl={bannerSettings.headerMobileImage}
+                  alt={`Banner promocional - ${product.name}`}
+                  maxHeight={bannerSettings.headerMaxHeight}
+                  verticalAlignment={bannerSettings.headerVerticalAlignment}
+                  enabled={bannerSettings.headerEnabled}
+                />
 
-            <div className="px-4 py-8 lg:py-6">
-              <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Finalizar Compra
-                </h1>
-                <p className="text-gray-500 mt-2">
-                  Complete suas informações para prosseguir
-                </p>
+                <div className="px-4 py-8 lg:py-6">
+                  <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900">
+                      Finalizar Compra
+                    </h1>
+                    <p className="text-gray-500 mt-2">
+                      Complete suas informações para prosseguir
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Formulário de checkout */}
+                    <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
+                      <CheckoutForm
+                        product={product}
+                        selectedInstallments={selectedInstallments}
+                        totalAmount={totalAmount}
+                        onPaymentMethodChange={setPaymentMethod}
+                        selectedBumps={selectedBumps}
+                        affiliateRef={affiliateRef}
+                        appliedCoupon={appliedCoupon}
+                      />
+                    </div>
+
+                    {/* Resumo do pedido */}
+                    <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
+                      <Suspense
+                        fallback={<Skeleton className="h-[400px] w-full" />}
+                      >
+                        <OrderSummary
+                          product={product}
+                          paymentMethod={paymentMethod}
+                          onInstallmentChange={(installments, amount) => {
+                            setSelectedInstallments(installments);
+                            setTotalAmount(amount);
+                          }}
+                          selectedBumps={selectedBumps}
+                          onBumpSelect={handleBumpSelection}
+                          onCouponApply={handleCouponApply}
+                        />
+                      </Suspense>
+                    </div>
+                  </div>
+                </div>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                <div className="lg:col-span-7 order-2 lg:order-1 space-y-6">
-                  <CheckoutForm
-                    product={product}
-                    selectedInstallments={selectedInstallments}
-                    totalAmount={totalAmount}
-                    onPaymentMethodChange={setPaymentMethod}
-                    selectedBumps={selectedBumps}
-                    affiliateRef={affiliateRef}
-                    appliedCoupon={appliedCoupon}
-                  />
-                </div>
-
-                <div className="lg:col-span-5 order-1 lg:order-2 lg:sticky lg:top-4">
-                  <Suspense
-                    fallback={<Skeleton className="h-[400px] w-full" />}
-                  >
-                    <OrderSummary
-                      product={product}
-                      paymentMethod={paymentMethod}
-                      onInstallmentChange={(installments, amount) => {
-                        setSelectedInstallments(installments);
-                        setTotalAmount(amount);
-                      }}
-                      selectedBumps={selectedBumps}
-                      onBumpSelect={handleBumpSelection}
-                      onCouponApply={handleCouponApply}
-                    />
-                  </Suspense>
-                </div>
+            {/* Banner lateral (apenas desktop) */}
+            <div className="lg:col-span-4 order-1 lg:order-2">
+              <div className="lg:sticky lg:top-4">
+                <SidebarBanner
+                  imageUrl={bannerSettings.sidebarImage}
+                  alt="Banner lateral promocional"
+                  enabled={bannerSettings.sidebarEnabled}
+                />
               </div>
             </div>
           </div>

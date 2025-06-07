@@ -193,30 +193,52 @@ model Coupon {
 
 model CheckoutSettings {
   id                    String   @id @default(cuid())
+
+    // Dados da empresa
   companyName           String
   logoUrl               String?
+
+    // Cores
   primaryColor          String
   secondaryColor        String
   accentColor           String
+
+  // Textos
   checkoutTitle         String
   checkoutDescription   String
   successMessage        String
+
+  // URLs de políticas
   termsAndConditionsUrl String?
   privacyPolicyUrl      String?
+
+   // Configurações de pagamento
   showInstallments      Boolean  @default(true)
   maxInstallments       Int      @default(12)
   showPixDiscount       Boolean  @default(false)
   pixDiscountPercentage Float    @default(0)
   defaultPaymentMethod  String   @default("credit_card")
   enableOrderBumps      Boolean  @default(true)
-  headerBackgroundImage String?
+
+   // Banner principal (header)
+  headerBackgroundImage String?   // Imagem desktop (campo existente)
+  headerMobileImage     String?   // 🆕 Imagem mobile
+  headerMaxHeight       Int?      @default(350)
+  headerVerticalAlign   String?   @default("center")
+  headerEnabled         Boolean?  @default(true)
+
+  // Banner lateral (sidebar) 🆕
+  sidebarBannerImage    String?   // URL da imagem lateral
+  sidebarBannerEnabled  Boolean?  @default(false)
+
+  // Footer e CSS
   footerText            String?
   customCss             String?
+
+  // Timestamps
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-  headerMaxHeight       Int?
-  headerVerticalAlign   String?
-  headerEnabled         Boolean? @default(true)
+
 
   @@map("checkout_settings")
 }
