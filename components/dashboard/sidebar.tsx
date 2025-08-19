@@ -7,7 +7,7 @@ import {
   Home,
   Package,
   ShoppingCart,
-  Users,
+  //Users,
   HandCoins,
   BadgeDollarSign,
   Tag,
@@ -65,12 +65,12 @@ const mainMenuItems = [
     icon: ShoppingCart,
     disabled: false,
   },
-  {
-    title: "Clientes",
-    url: "/clients",
-    icon: Users,
-    disabled: true, // Desabilitado - em desenvolvimento
-  },
+  //{
+  //  title: "Clientes",
+  //  url: "/clientes",
+  //  icon: Users,
+  //  disabled: false,
+  //},
   {
     title: "Cupons",
     url: "/coupons",

@@ -17,13 +17,28 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "50");
     const skip = (page - 1) * limit;
 
+    // Parâmetro de filtro por afiliado
+    const affiliateFilter = searchParams.get("affiliate");
+
     // Where clause para filtros
-    const whereClause = {
+    const whereClause: any = {
       createdAt: {
         gte: fromDate,
         lte: toDate,
       },
     };
+
+    // Aplicar filtro de afiliado se especificado
+    if (affiliateFilter) {
+      if (affiliateFilter === "with_affiliate") {
+        whereClause.affiliateId = { not: null };
+      } else if (affiliateFilter === "without_affiliate") {
+        whereClause.affiliateId = null;
+      } else {
+        // Filtro por afiliado específico
+        whereClause.affiliateId = affiliateFilter;
+      }
+    }
 
     // Contar total de transações (para calcular total de páginas)
     const totalCount = await prisma.order.count({
@@ -35,6 +50,11 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         customer: true,
+        affiliate: {
+          include: {
+            user: true,
+          },
+        },
         items: {
           include: {
             product: true,
@@ -56,11 +76,30 @@ export async function GET(request: Request) {
         id: order.id,
         orderId: `#${order.id.slice(0, 8)}`, // Formatado para exibição
         customer: order.customer.name,
+        customerDetails: {
+          name: order.customer.name,
+          email: order.customer.email,
+          document: order.customer.document,
+          phone: order.customer.phone,
+        },
         product: product?.name || "Produto não encontrado",
         paymentMethod: order.paymentMethod as "credit_card" | "pix",
         status: order.status as "pending" | "paid" | "failed" | "refunded",
         date: order.createdAt.toISOString(),
         amount: order.amount,
+        installments: order.installments,
+        affiliate: order.affiliate ? {
+          id: order.affiliate.id,
+          name: order.affiliate.user.name,
+          commission: order.affiliate.commission,
+        } : null,
+        hasAffiliate: !!order.affiliate,
+        // Informações adicionais para relatórios robustos
+        pagarmeTransactionId: order.pagarmeTransactionId,
+        splitAmount: order.splitAmount,
+        failureReason: order.failureReason,
+        failureCode: order.failureCode,
+        attempts: order.attempts,
       };
     });
 

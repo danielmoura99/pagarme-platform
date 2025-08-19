@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // app/(dashboard)/_components/transactions-table.tsx
 "use client";
 
@@ -53,11 +54,30 @@ interface Transaction {
   id: string;
   orderId: string;
   customer: string;
+  customerDetails: {
+    name: string;
+    email: string;
+    document: string;
+    phone: string | null;
+  };
   product: string;
   paymentMethod: "credit_card" | "pix";
   status: "pending" | "paid" | "failed" | "refunded";
   date: string;
   amount: number;
+  installments?: number;
+  affiliate: {
+    id: string;
+    name: string;
+    commission: number;
+  } | null;
+  hasAffiliate: boolean;
+  // Campos adicionais para relatórios robustos
+  pagarmeTransactionId?: string | null;
+  splitAmount?: number | null;
+  failureReason?: string | null;
+  failureCode?: string | null;
+  attempts?: number;
 }
 
 // Tipo para paginação
@@ -289,11 +309,21 @@ export function TransactionsTable() {
     const headers = [
       "ID",
       "Pedido",
-      "Cliente",
+      "Nome Cliente",
+      "Email Cliente",
+      "Documento Cliente",
+      "Telefone Cliente",
       "Produto",
       "Valor",
+      "Parcelas",
       "Método",
       "Status",
+      "Afiliado",
+      "Comissão Split",
+      "ID Pagar.me",
+      "Tentativas",
+      "Motivo Falha",
+      "Código Falha",
       "Data",
     ];
 
@@ -303,9 +333,15 @@ export function TransactionsTable() {
         return [
           t.id,
           t.orderId,
-          `"${t.customer.replace(/"/g, '""')}"`, // Escapar aspas no formato CSV
+          `"${t.customerDetails.name.replace(/"/g, '""')}"`,
+          `"${t.customerDetails.email.replace(/"/g, '""')}"`,
+          `"${t.customerDetails.document.replace(/"/g, '""')}"`,
+          t.customerDetails.phone
+            ? `"${t.customerDetails.phone.replace(/"/g, '""')}"`
+            : "Não informado",
           `"${t.product.replace(/"/g, '""')}"`,
           formatCurrency(t.amount).replace(/\./g, ","),
+          t.installments && t.installments > 1 ? `${t.installments}x` : "1x",
           t.paymentMethod === "credit_card" ? "Cartão" : "PIX",
           t.status === "paid"
             ? "Pago"
@@ -314,18 +350,30 @@ export function TransactionsTable() {
               : t.status === "failed"
                 ? "Falhou"
                 : "Reembolsado",
+          t.affiliate ? `"${t.affiliate.name.replace(/"/g, '""')}"` : "Direto",
+          t.splitAmount
+            ? formatCurrency(Math.round(t.splitAmount)).replace(/\./g, ",")
+            : "R$ 0,00",
+          t.pagarmeTransactionId
+            ? `"${t.pagarmeTransactionId.replace(/"/g, '""')}"`
+            : "N/A",
+          t.attempts ? t.attempts.toString() : "1",
+          t.failureReason ? `"${t.failureReason.replace(/"/g, '""')}"` : "N/A",
+          t.failureCode ? `"${t.failureCode.replace(/"/g, '""')}"` : "N/A",
           format(new Date(t.date), "dd/MM/yyyy HH:mm", { locale: ptBR }),
         ].join(",");
       }),
     ].join("\n");
 
-    const blob = new Blob([csvRows], { type: "text/csv;charset=utf-8" });
+    // Adicionar BOM (Byte Order Mark) para garantir encoding UTF-8 correto
+    const BOM = "\uFEFF";
+    const blob = new Blob([BOM + csvRows], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `transacoes_${format(new Date(), "yyyy-MM-dd")}.csv`
+      `transacoes_detalhadas_${format(new Date(), "yyyy-MM-dd")}.csv`
     );
     link.click();
   };
@@ -333,18 +381,80 @@ export function TransactionsTable() {
   // Exportar para JSON
   const exportToJSON = () => {
     const formattedData = filteredTransactions.map((t) => ({
+      // Informações básicas da transação
       id: t.id,
       orderId: t.orderId,
-      customer: t.customer,
-      product: t.product,
-      amount: t.amount,
-      formattedAmount: formatCurrency(t.amount),
-      paymentMethod: t.paymentMethod,
+      pagarmeTransactionId: t.pagarmeTransactionId,
+
+      // Informações do cliente
+      customer: {
+        name: t.customerDetails.name,
+        email: t.customerDetails.email,
+        document: t.customerDetails.document,
+        formattedDocument: t.customerDetails.document.replace(
+          /(\d{3})(\d{3})(\d{3})(\d{2})/,
+          "$1.$2.$3-$4"
+        ),
+        phone: t.customerDetails.phone || "Não informado",
+      },
+
+      // Informações do produto
+      product: {
+        name: t.product,
+      },
+
+      // Informações de pagamento
+      payment: {
+        amount: t.amount,
+        formattedAmount: formatCurrency(t.amount),
+        installments: t.installments || 1,
+        method: t.paymentMethod,
+        methodLabel:
+          t.paymentMethod === "credit_card" ? "Cartão de Crédito" : "PIX",
+      },
+
+      // Status da transação
       status: t.status,
-      date: t.date,
-      formattedDate: format(new Date(t.date), "dd/MM/yyyy HH:mm", {
-        locale: ptBR,
-      }),
+      statusLabel:
+        t.status === "paid"
+          ? "Pago"
+          : t.status === "pending"
+            ? "Pendente"
+            : t.status === "failed"
+              ? "Falhou"
+              : "Reembolsado",
+
+      // Informações de afiliado
+      affiliate: t.affiliate
+        ? {
+            name: t.affiliate.name,
+            commission: t.affiliate.commission,
+            splitAmount: t.splitAmount,
+            formattedSplitAmount: t.splitAmount
+              ? formatCurrency(Math.round(t.splitAmount))
+              : "R$ 0,00",
+          }
+        : null,
+      hasAffiliate: t.hasAffiliate,
+
+      // Informações de falha (se aplicável)
+      failure:
+        t.status === "failed"
+          ? {
+              reason: t.failureReason || "N/A",
+              code: t.failureCode || "N/A",
+              attempts: t.attempts || 1,
+            }
+          : null,
+
+      // Datas
+      dates: {
+        created: t.date,
+        formattedCreated: format(new Date(t.date), "dd/MM/yyyy HH:mm", {
+          locale: ptBR,
+        }),
+        createdISO: new Date(t.date).toISOString(),
+      },
     }));
 
     const blob = new Blob([JSON.stringify(formattedData, null, 2)], {
@@ -355,7 +465,7 @@ export function TransactionsTable() {
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `transacoes_${format(new Date(), "yyyy-MM-dd")}.json`
+      `transacoes_detalhadas_${format(new Date(), "yyyy-MM-dd")}.json`
     );
     link.click();
   };
