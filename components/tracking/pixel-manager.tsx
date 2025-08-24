@@ -31,6 +31,14 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   // ✅ NOVO: Cache para prevenir eventos duplicados
   const firedEvents = useRef<Set<string>>(new Set());
 
+  // ✅ DEBUG: Log quando PixelManager carrega
+  console.log("🚀 [PIXEL_MANAGER] Iniciado:", {
+    pathname,
+    pixelsCount: pixels.length,
+    eventData: eventData ? "presente" : "ausente",
+    timestamp: new Date().toISOString()
+  });
+
   // Gerar ou recuperar session ID
   const getSessionId = () => {
     let sessionId = sessionStorage.getItem("pixel_session_id");
@@ -365,13 +373,31 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   };
 
   const fireEvent = (eventName: string) => {
-    pixels.forEach(async (pixel) => {
-      if (!pixel.enabled || !pixel.events.includes(eventName as any)) return;
+    console.log(`🔥 [PIXEL_FIRE_START] Iniciando fireEvent("${eventName}") - ${pixels.length} pixels configurados`);
+    
+    pixels.forEach(async (pixel, index) => {
+      console.log(`🎯 [PIXEL_LOOP] Processando pixel ${index + 1}/${pixels.length}:`, {
+        platform: pixel.platform,
+        pixelId: pixel.pixelId,
+        enabled: pixel.enabled,
+        events: pixel.events,
+        eventName
+      });
+
+      if (!pixel.enabled || !pixel.events.includes(eventName as any)) {
+        console.log(`❌ [PIXEL_SKIP_CONFIG] Pixel ${pixel.platform} pulado - não habilitado ou evento não configurado`);
+        return;
+      }
 
       const trafficSource = getTrafficSource();
 
       // ✅ NOVO: Verificar se deve disparar pixel baseado na fonte
       const shouldFire = shouldFirePixel(pixel.platform, trafficSource);
+      
+      console.log(`🎯 [PIXEL_SHOULD_FIRE] ${pixel.platform}: ${shouldFire}`, {
+        trafficSource,
+        platform: pixel.platform
+      });
       
       // Log do evento sempre (mesmo em modo teste para analytics)
       await logPixelEvent(pixel.id, eventName, eventData, eventData?.orderId);
