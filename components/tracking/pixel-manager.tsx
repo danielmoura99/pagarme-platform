@@ -62,23 +62,67 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       return null;
     };
 
-    // Capturar UTM parameters de múltiplas fontes
-    const utmSource = getStoredUTM("utm_source");
-    const utmMedium = getStoredUTM("utm_medium");
-    const utmCampaign = getStoredUTM("utm_campaign");
-    const utmTerm = getStoredUTM("utm_term");
-    const utmContent = getStoredUTM("utm_content");
+    // ✅ SOLUÇÃO ROBUSTA: Capturar UTMs de múltiplas fontes
+    let utmSource = getStoredUTM("utm_source");
+    let utmMedium = getStoredUTM("utm_medium");
+    let utmCampaign = getStoredUTM("utm_campaign");
+    let utmTerm = getStoredUTM("utm_term");
+    let utmContent = getStoredUTM("utm_content");
 
-    // Salvar UTMs na sessão para persistir durante toda a navegação
+    // ✅ NOVA FUNCIONALIDADE: Extrair UTMs do referrer se não encontrados
+    if (!utmSource && document.referrer) {
+      try {
+        const referrerUrl = new URL(document.referrer);
+        const referrerParams = new URLSearchParams(referrerUrl.search);
+        
+        if (referrerParams.get("utm_source")) {
+          utmSource = referrerParams.get("utm_source");
+          utmMedium = referrerParams.get("utm_medium");
+          utmCampaign = referrerParams.get("utm_campaign");
+          utmTerm = referrerParams.get("utm_term");
+          utmContent = referrerParams.get("utm_content");
+          
+          // Salvar UTMs extraídos do referrer
+          if (utmSource) sessionStorage.setItem("utm_source", utmSource);
+          if (utmMedium) sessionStorage.setItem("utm_medium", utmMedium);
+          if (utmCampaign) sessionStorage.setItem("utm_campaign", utmCampaign);
+          if (utmTerm) sessionStorage.setItem("utm_term", utmTerm);
+          if (utmContent) sessionStorage.setItem("utm_content", utmContent);
+          
+          console.log("🎯 [PIXEL_UTM_REFERRER] UTMs extraídos do referrer:", {
+            referrer: document.referrer,
+            extracted: {
+              source: utmSource,
+              medium: utmMedium,
+              campaign: utmCampaign,
+              path: referrerUrl.pathname
+            }
+          });
+        }
+      } catch (error) {
+        console.warn("Erro ao processar referrer:", error);
+      }
+    }
+
+    // Salvar UTMs da URL atual (tem prioridade sobre referrer)
     if (urlParams.get("utm_source")) {
-      sessionStorage.setItem("utm_source", urlParams.get("utm_source")!);
-      sessionStorage.setItem("utm_medium", urlParams.get("utm_medium") || "");
-      sessionStorage.setItem(
-        "utm_campaign",
-        urlParams.get("utm_campaign") || ""
-      );
-      sessionStorage.setItem("utm_term", urlParams.get("utm_term") || "");
-      sessionStorage.setItem("utm_content", urlParams.get("utm_content") || "");
+      utmSource = urlParams.get("utm_source")!;
+      utmMedium = urlParams.get("utm_medium") || utmMedium;
+      utmCampaign = urlParams.get("utm_campaign") || utmCampaign;
+      utmTerm = urlParams.get("utm_term") || utmTerm;
+      utmContent = urlParams.get("utm_content") || utmContent;
+      
+      sessionStorage.setItem("utm_source", utmSource);
+      sessionStorage.setItem("utm_medium", utmMedium || "");
+      sessionStorage.setItem("utm_campaign", utmCampaign || "");
+      sessionStorage.setItem("utm_term", utmTerm || "");
+      sessionStorage.setItem("utm_content", utmContent || "");
+      
+      console.log("🎯 [PIXEL_UTM_URL] UTMs da URL atual:", {
+        source: utmSource,
+        medium: utmMedium,
+        campaign: utmCampaign
+      });
     }
 
     // Capturar landing page (primeira página da sessão)
@@ -117,7 +161,8 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       medium = "none";
     }
 
-    return {
+    // ✅ Log detalhado da detecção final
+    const trafficSourceResult = {
       source,
       medium,
       campaign: utmCampaign,
@@ -126,6 +171,15 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       referrer: document.referrer || null,
       landingPage: landingPage,
     };
+
+    console.log("🎯 [PIXEL_TRAFFIC_SOURCE] Origem final detectada:", {
+      ...trafficSourceResult,
+      detectionMethod: utmSource ? "UTM_FOUND" : (document.referrer ? "REFERRER_FALLBACK" : "DIRECT"),
+      referrerHost: document.referrer ? new URL(document.referrer).hostname : null,
+      referrerPath: document.referrer ? new URL(document.referrer).pathname : null,
+    });
+
+    return trafficSourceResult;
   };
 
   // Função para registrar eventos
