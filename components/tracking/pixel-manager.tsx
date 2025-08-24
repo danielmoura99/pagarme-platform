@@ -75,6 +75,22 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
         const referrerUrl = new URL(document.referrer);
         const referrerParams = new URLSearchParams(referrerUrl.search);
         
+        // ✅ DEBUG COMPLETO
+        console.log("🔍 [DEBUG_REFERRER] Análise completa do referrer:", {
+          fullReferrer: document.referrer,
+          hostname: referrerUrl.hostname,
+          pathname: referrerUrl.pathname,
+          search: referrerUrl.search,
+          utmSourceFromReferrer: referrerParams.get("utm_source"),
+          utmMediumFromReferrer: referrerParams.get("utm_medium"),
+          allStoredUTMs: {
+            sessionUtmSource: sessionStorage.getItem("utm_source"),
+            localUtmSource: localStorage.getItem("utm_source"),
+            backupUtmSource: localStorage.getItem("utm_source_backup"),
+            timestamp: localStorage.getItem("utm_timestamp")
+          }
+        });
+        
         // Tentar extrair UTMs do referrer
         if (referrerParams.get("utm_source")) {
           utmSource = referrerParams.get("utm_source");
@@ -105,17 +121,20 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
               referrerPath: referrerUrl.pathname
             });
           }
-          // ✅ FALLBACK INTELIGENTE: Detectar por path
-          else if (referrerUrl.pathname.includes("thprop")) {
-            // Se veio de /thprop, provavelmente é tráfego Facebook
+          // ✅ FALLBACK INTELIGENTE: Detectar por hostname + assumir tráfego pago
+          else {
+            // Se veio de escolatradershouse.com.br, assumir que é tráfego pago Facebook
+            // (já que essa página só é usada para tráfego pago)
             utmSource = "facebook";
             utmMedium = "cpc";
-            utmCampaign = "thprop_campaign";
+            utmCampaign = "escolatradershouse_campaign";
             
-            console.log("🎯 [PIXEL_PATH_DETECTION] Detectado por path:", {
+            console.log("🎯 [PIXEL_HOSTNAME_DETECTION] Detectado por hostname:", {
+              hostname: referrerUrl.hostname,
               path: referrerUrl.pathname,
               assumedSource: utmSource,
-              assumedMedium: utmMedium
+              assumedMedium: utmMedium,
+              reason: "escolatradershouse.com.br sempre é tráfego pago"
             });
           }
         }
@@ -281,16 +300,22 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     });
   }, [pixels]);
 
-  // ✅ LÓGICA CORRIGIDA - Rastreamento apenas dos eventos principais
+  // ✅ LÓGICA CORRIGIDA - Rastreamento apenas dos eventos principais  
   useEffect(() => {
-    // 🎯 EVENTOS PRINCIPAIS COM PREVENÇÃO DE DUPLICATAS:
+    // Aguardar pixels carregarem
+    if (pixels.length === 0) return;
+    
+    // 🎯 EVENTOS PRINCIPAIS COM PREVENÇÃO ROBUSTA:
     
     // ✅ Página de checkout → InitiateCheckout
     if (pathname.includes("/checkout")) {
       const eventKey = `InitiateCheckout-${pathname}-${getSessionId()}`;
       if (!firedEvents.current.has(eventKey)) {
         firedEvents.current.add(eventKey);
+        console.log(`🎯 [PIXEL_FIRE] Disparando InitiateCheckout - Key: ${eventKey}`);
         fireEvent("InitiateCheckout");
+      } else {
+        console.log(`🔄 [PIXEL_SKIP] InitiateCheckout já disparado - Key: ${eventKey}`);
       }
     }
     // ✅ Página de sucesso → Purchase (com orderId único)
@@ -298,13 +323,13 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       const eventKey = `Purchase-${eventData.orderId}`;
       if (!firedEvents.current.has(eventKey)) {
         firedEvents.current.add(eventKey);
+        console.log(`🎯 [PIXEL_FIRE] Disparando Purchase - Key: ${eventKey}`);
         fireEvent("Purchase");
-        console.log(`[PIXEL_DEDUP] Purchase event fired once for order: ${eventData.orderId}`);
       } else {
-        console.log(`[PIXEL_DEDUP] Purchase event already fired for order: ${eventData.orderId}`);
+        console.log(`🔄 [PIXEL_SKIP] Purchase já disparado - Key: ${eventKey}`);
       }
     }
-  }, [pathname, pixels, eventData]);
+  }, [pathname, pixels.length, eventData?.orderId]); // ✅ Dependências específicas
 
   // Função para verificar se deve disparar pixel baseado na fonte de tráfego
   const shouldFirePixel = (platform: string, trafficSource: ReturnType<typeof getTrafficSource>) => {
