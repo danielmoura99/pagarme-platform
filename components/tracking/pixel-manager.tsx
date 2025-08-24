@@ -46,17 +46,28 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionStorage = window.sessionStorage;
 
-    // Capturar UTM parameters
-    const utmSource =
-      urlParams.get("utm_source") || sessionStorage.getItem("utm_source");
-    const utmMedium =
-      urlParams.get("utm_medium") || sessionStorage.getItem("utm_medium");
-    const utmCampaign =
-      urlParams.get("utm_campaign") || sessionStorage.getItem("utm_campaign");
-    const utmTerm =
-      urlParams.get("utm_term") || sessionStorage.getItem("utm_term");
-    const utmContent =
-      urlParams.get("utm_content") || sessionStorage.getItem("utm_content");
+    // Função para buscar UTM em múltiplas fontes
+    const getStoredUTM = (param: string) => {
+      return urlParams.get(param) || 
+             sessionStorage.getItem(param) || 
+             localStorage.getItem(param) ||
+             getCookie(param);
+    };
+
+    // Função para buscar cookie
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+      return null;
+    };
+
+    // Capturar UTM parameters de múltiplas fontes
+    const utmSource = getStoredUTM("utm_source");
+    const utmMedium = getStoredUTM("utm_medium");
+    const utmCampaign = getStoredUTM("utm_campaign");
+    const utmTerm = getStoredUTM("utm_term");
+    const utmContent = getStoredUTM("utm_content");
 
     // Salvar UTMs na sessão para persistir durante toda a navegação
     if (urlParams.get("utm_source")) {
