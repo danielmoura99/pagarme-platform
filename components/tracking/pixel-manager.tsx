@@ -69,12 +69,13 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     let utmTerm = getStoredUTM("utm_term");
     let utmContent = getStoredUTM("utm_content");
 
-    // ✅ NOVA FUNCIONALIDADE: Extrair UTMs do referrer se não encontrados
+    // ✅ FUNCIONALIDADE MELHORADA: Extrair UTMs do referrer + detecção inteligente
     if (!utmSource && document.referrer) {
       try {
         const referrerUrl = new URL(document.referrer);
         const referrerParams = new URLSearchParams(referrerUrl.search);
         
+        // Tentar extrair UTMs do referrer
         if (referrerParams.get("utm_source")) {
           utmSource = referrerParams.get("utm_source");
           utmMedium = referrerParams.get("utm_medium");
@@ -82,23 +83,55 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
           utmTerm = referrerParams.get("utm_term");
           utmContent = referrerParams.get("utm_content");
           
-          // Salvar UTMs extraídos do referrer
-          if (utmSource) sessionStorage.setItem("utm_source", utmSource);
-          if (utmMedium) sessionStorage.setItem("utm_medium", utmMedium);
-          if (utmCampaign) sessionStorage.setItem("utm_campaign", utmCampaign);
-          if (utmTerm) sessionStorage.setItem("utm_term", utmTerm);
-          if (utmContent) sessionStorage.setItem("utm_content", utmContent);
-          
           console.log("🎯 [PIXEL_UTM_REFERRER] UTMs extraídos do referrer:", {
             referrer: document.referrer,
-            extracted: {
-              source: utmSource,
-              medium: utmMedium,
-              campaign: utmCampaign,
-              path: referrerUrl.pathname
-            }
+            extracted: { source: utmSource, medium: utmMedium, campaign: utmCampaign }
           });
         }
+        // ✅ NOVA LÓGICA: Se referrer é escolatradershouse.com.br, assumir que veio de tráfego pago
+        else if (referrerUrl.hostname === "escolatradershouse.com.br") {
+          // Verificar se temos UTMs salvos recentemente (últimos 30min)
+          const savedTimestamp = localStorage.getItem("utm_timestamp");
+          const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+          
+          if (savedTimestamp && parseInt(savedTimestamp) > thirtyMinutesAgo) {
+            // UTMs salvos recentemente, usar eles
+            utmSource = localStorage.getItem("utm_source_backup");
+            utmMedium = localStorage.getItem("utm_medium_backup");
+            utmCampaign = localStorage.getItem("utm_campaign_backup");
+            
+            console.log("🎯 [PIXEL_UTM_BACKUP] UTMs recuperados do backup recente:", {
+              source: utmSource, medium: utmMedium, campaign: utmCampaign,
+              referrerPath: referrerUrl.pathname
+            });
+          }
+          // ✅ FALLBACK INTELIGENTE: Detectar por path
+          else if (referrerUrl.pathname.includes("thprop")) {
+            // Se veio de /thprop, provavelmente é tráfego Facebook
+            utmSource = "facebook";
+            utmMedium = "cpc";
+            utmCampaign = "thprop_campaign";
+            
+            console.log("🎯 [PIXEL_PATH_DETECTION] Detectado por path:", {
+              path: referrerUrl.pathname,
+              assumedSource: utmSource,
+              assumedMedium: utmMedium
+            });
+          }
+        }
+        
+        // Salvar UTMs encontrados
+        if (utmSource) {
+          sessionStorage.setItem("utm_source", utmSource);
+          sessionStorage.setItem("utm_medium", utmMedium || "");
+          sessionStorage.setItem("utm_campaign", utmCampaign || "");
+          // Backup para próximas sessões
+          localStorage.setItem("utm_source_backup", utmSource);
+          localStorage.setItem("utm_medium_backup", utmMedium || "");
+          localStorage.setItem("utm_campaign_backup", utmCampaign || "");
+          localStorage.setItem("utm_timestamp", Date.now().toString());
+        }
+        
       } catch (error) {
         console.warn("Erro ao processar referrer:", error);
       }
