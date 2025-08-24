@@ -27,6 +27,9 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const searchParams = useSearchParams();
   const initializedPixels = useRef<Set<string>>(new Set());
+  
+  // ✅ NOVO: Cache para prevenir eventos duplicados
+  const firedEvents = useRef<Set<string>>(new Set());
 
   // Gerar ou recuperar session ID
   const getSessionId = () => {
@@ -182,37 +185,71 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
 
   // ✅ LÓGICA CORRIGIDA - Rastreamento apenas dos eventos principais
   useEffect(() => {
-    // 🟡 PageView e ViewContent em standby
-    // const firePageViewEvent = () => {
-    //   pixels.forEach(async (pixel) => {
-    //     if (!pixel.enabled || !pixel.events.includes("PageView")) return;
-    //     await logPixelEvent(pixel.id, "PageView", eventData);
-    //     if (pixel.testMode) {
-    //       console.log(`[PIXEL TEST MODE] PageView event:`, { /* ... */ });
-    //       return;
-    //     }
-    //     // ... disparo do evento
-    //   });
-    // };
-
-    // Dispara PageView quando a página muda (temporariamente desabilitado)
-    // firePageViewEvent();
-
-    // 🎯 EVENTOS PRINCIPAIS - LÓGICA CORRIGIDA:
+    // 🎯 EVENTOS PRINCIPAIS COM PREVENÇÃO DE DUPLICATAS:
+    
     // ✅ Página de checkout → InitiateCheckout
     if (pathname.includes("/checkout")) {
-      fireEvent("InitiateCheckout");
+      const eventKey = `InitiateCheckout-${pathname}-${getSessionId()}`;
+      if (!firedEvents.current.has(eventKey)) {
+        firedEvents.current.add(eventKey);
+        fireEvent("InitiateCheckout");
+      }
     }
-    // ✅ Página de sucesso → Purchase
-    else if (pathname.includes("/success")) {
-      fireEvent("Purchase");
+    // ✅ Página de sucesso → Purchase (com orderId único)
+    else if (pathname.includes("/success") && eventData?.orderId) {
+      const eventKey = `Purchase-${eventData.orderId}`;
+      if (!firedEvents.current.has(eventKey)) {
+        firedEvents.current.add(eventKey);
+        fireEvent("Purchase");
+        console.log(`[PIXEL_DEDUP] Purchase event fired once for order: ${eventData.orderId}`);
+      } else {
+        console.log(`[PIXEL_DEDUP] Purchase event already fired for order: ${eventData.orderId}`);
+      }
     }
   }, [pathname, pixels, eventData]);
+
+  // Função para verificar se deve disparar pixel baseado na fonte de tráfego
+  const shouldFirePixel = (platform: string, trafficSource: ReturnType<typeof getTrafficSource>) => {
+    switch (platform) {
+      case "facebook":
+        // Facebook Pixel: só dispara para tráfego pago do Facebook/Instagram
+        return (trafficSource.source === "facebook" || trafficSource.source === "instagram") && 
+               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
+      
+      case "google_ads":
+        // Google Ads: só dispara para tráfego pago do Google
+        return trafficSource.source === "google" && 
+               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
+      
+      case "google_analytics":
+        // Google Analytics: recebe TODOS os eventos para análise geral
+        return true;
+      
+      case "tiktok":
+        // TikTok: só dispara para tráfego pago do TikTok
+        return trafficSource.source === "tiktok" && 
+               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
+      
+      case "snapchat":
+        // Snapchat: só dispara para tráfego pago do Snapchat
+        return trafficSource.source === "snapchat" && 
+               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
+      
+      default:
+        // Outras plataformas: por padrão, dispara
+        return true;
+    }
+  };
 
   const fireEvent = (eventName: string) => {
     pixels.forEach(async (pixel) => {
       if (!pixel.enabled || !pixel.events.includes(eventName as any)) return;
 
+      const trafficSource = getTrafficSource();
+
+      // ✅ NOVO: Verificar se deve disparar pixel baseado na fonte
+      const shouldFire = shouldFirePixel(pixel.platform, trafficSource);
+      
       // Log do evento sempre (mesmo em modo teste para analytics)
       await logPixelEvent(pixel.id, eventName, eventData, eventData?.orderId);
 
@@ -221,7 +258,18 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
           platform: pixel.platform,
           pixelId: pixel.pixelId,
           eventData,
-          trafficSource: getTrafficSource(),
+          trafficSource,
+          shouldFire, // ✅ Mostrar se vai disparar
+        });
+        return;
+      }
+
+      // ✅ NOVO: Só dispara o pixel se passou no filtro
+      if (!shouldFire) {
+        console.log(`[PIXEL FILTERED] ${pixel.platform} pixel skipped for traffic source:`, {
+          source: trafficSource.source,
+          medium: trafficSource.medium,
+          reason: "Not paid traffic for this platform"
         });
         return;
       }

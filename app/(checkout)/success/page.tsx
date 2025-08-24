@@ -40,6 +40,7 @@ export default async function SuccessPage({
   // Preparar dados do evento de conversão
   const pixelEventData = order
     ? {
+        email: order.customer?.email,
         content_ids: order.items.map((item) => item.productId),
         content_name: order.items[0]?.product.name,
         content_type: "product",
@@ -81,7 +82,7 @@ export default async function SuccessPage({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Link href="https://tradershouse.com.br/mesaproprietaria/">
+              <Link href="https://escolatradershouse.com.br/thprop//">
                 <Button className="w-full">Ver mais produtos</Button>
               </Link>
               <Link href="https://api.whatsapp.com/send?phone=5562993776216">
