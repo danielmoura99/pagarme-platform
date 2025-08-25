@@ -198,7 +198,7 @@ export function PeriodComparison() {
                     {metric.format === "currency"
                       ? formatCurrency(metric.current)
                       : metric.format === "percentage"
-                        ? `${metric.current.toFixed(2)}%`
+                        ? `${(metric.current || 0).toFixed(2)}%`
                         : metric.current}
                   </div>
                 </div>
@@ -208,7 +208,7 @@ export function PeriodComparison() {
                     {metric.format === "currency"
                       ? formatCurrency(metric.previous)
                       : metric.format === "percentage"
-                        ? `${metric.previous.toFixed(2)}%`
+                        ? `${(metric.previous || 0).toFixed(2)}%`
                         : metric.previous}
                   </div>
                 </div>

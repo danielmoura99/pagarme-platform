@@ -141,7 +141,7 @@ export function PixelAnalytics() {
             {data?.summary.totalConversions || 0}
           </div>
           <p className="text-xs text-muted-foreground">
-            {data?.summary.conversionRate?.toFixed(2)}% taxa de conversão
+            {(data?.summary.conversionRate || 0).toFixed(2)}% taxa de conversão
           </p>
         </CardContent>
       </Card>

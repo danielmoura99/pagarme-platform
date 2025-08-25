@@ -16,6 +16,7 @@ import {
 interface TrafficSource {
   source: string;
   medium: string;
+  campaign?: string; // ✅ ADICIONAR CAMPANHA
   visitors: number;
   conversions: number;
   revenue: number;
@@ -68,88 +69,152 @@ export function TrafficSources() {
     color: COLORS[index % COLORS.length],
   }));
 
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {/* Gráfico de Pizza */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Visitantes por Fonte</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+  // Separar fontes com campanha das sem campanha  
+  const sourcesWithCampaigns = data.filter(source => source.campaign);
+  // Mostrar todas as fontes na seção "Performance por Fonte"
+  const allSources = data;
 
-      {/* Tabela de Performance */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance por Fonte</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {data.map((source, index) => (
-              <div key={index} className="p-3 border rounded-lg">
-                <div className="flex justify-between items-center mb-2">
-                  <div>
-                    <span className="font-medium">
-                      {source.source || "Direct"}
-                    </span>
-                    <Badge variant="outline" className="ml-2">
-                      {source.medium || "None"}
-                    </Badge>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium">
-                      {source.conversionRate.toFixed(2)}%
+  return (
+    <div className="space-y-6">
+      {/* ✅ NOVA SEÇÃO: Campanhas Específicas */}
+      {sourcesWithCampaigns.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>📢 Performance por Campanha</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {sourcesWithCampaigns.map((source, index) => (
+                <div key={`campaign-${index}`} className="p-3 border rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">
+                        {source.campaign}
+                      </span>
+                      <Badge variant="outline">{source.source}</Badge>
+                      <Badge variant="secondary">{source.medium}</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Conv. Rate
+                    <div className="text-right">
+                      <div className="text-sm font-medium">
+                        {(source.conversionRate || 0).toFixed(2)}%
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Conv. Rate
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div className="font-medium">{source.visitors || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Visitantes
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-medium">{source.conversions || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Conversões
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-medium">
+                        {formatCurrency(source.revenue || 0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Receita</div>
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <div className="font-medium">{source.visitors}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Visitantes
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Gráfico de Pizza */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Visitantes por Fonte</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Tabela de Performance */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance por Fonte</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {allSources.map((source, index) => (
+                <div key={index} className="p-3 border rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">
+                        {source.campaign || `${source.source || "Direct"}/${source.medium || "None"}`}
+                      </span>
+                      {source.campaign && (
+                        <>
+                          <Badge variant="outline">{source.source}</Badge>
+                          <Badge variant="secondary">{source.medium}</Badge>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">
+                        {(source.conversionRate || 0).toFixed(2)}%
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Conv. Rate
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div className="font-medium">{source.conversions}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Conversões
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div className="font-medium">{source.visitors || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Visitantes
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="font-medium">
-                      {formatCurrency(source.revenue)}
+                    <div>
+                      <div className="font-medium">{source.conversions || 0}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Conversões
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">Receita</div>
+                    <div>
+                      <div className="font-medium">
+                        {formatCurrency(source.revenue || 0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Receita</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

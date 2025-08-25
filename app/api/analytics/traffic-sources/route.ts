@@ -42,27 +42,25 @@ export async function GET(request: Request) {
     `;
 
     // Calcular métricas por fonte
-    const formattedSources = (trafficSources as any[]).map((source) => ({
-      source: source.source || "direct",
-      medium: source.medium || "none",
-      campaign: source.campaign || "",
-      visitors: Number(source.visitors),
-      totalEvents: Number(source.total_events),
-      conversions: Number(source.conversions),
-      revenue: Number(source.revenue),
-      conversionRate:
-        source.visitors > 0
-          ? (Number(source.conversions) / Number(source.visitors)) * 100
-          : 0,
-      eventsPerVisitor:
-        source.visitors > 0
-          ? Number(source.total_events) / Number(source.visitors)
-          : 0,
-      averageOrderValue:
-        source.conversions > 0
-          ? Number(source.revenue) / Number(source.conversions)
-          : 0,
-    }));
+    const formattedSources = (trafficSources as any[]).map((source) => {
+      const visitors = Number(source.visitors) || 0;
+      const conversions = Number(source.conversions) || 0;
+      const revenue = Number(source.revenue) || 0;
+      const totalEvents = Number(source.total_events) || 0;
+
+      return {
+        source: source.source || "direct",
+        medium: source.medium || "none",
+        campaign: source.campaign || null, // ✅ Manter null se vazio para filtro funcionar
+        visitors,
+        totalEvents,
+        conversions,
+        revenue,
+        conversionRate: visitors > 0 ? (conversions / visitors) * 100 : 0,
+        eventsPerVisitor: visitors > 0 ? totalEvents / visitors : 0,
+        averageOrderValue: conversions > 0 ? revenue / conversions : 0,
+      };
+    });
 
     // Top campanhas
     const topCampaigns = await prisma.$queryRaw`
@@ -135,28 +133,34 @@ export async function GET(request: Request) {
               formattedSources.length
             : 0,
       },
-      topCampaigns: (topCampaigns as any[]).map((campaign) => ({
-        campaign: campaign.campaign,
-        source: campaign.source,
-        medium: campaign.medium,
-        visitors: Number(campaign.visitors),
-        conversions: Number(campaign.conversions),
-        revenue: Number(campaign.revenue),
-        conversionRate:
-          campaign.visitors > 0
-            ? (Number(campaign.conversions) / Number(campaign.visitors)) * 100
-            : 0,
-      })),
-      landingPages: (landingPages as any[]).map((page) => ({
-        url: page.landingPage,
-        visitors: Number(page.visitors),
-        conversions: Number(page.conversions),
-        revenue: Number(page.revenue),
-        conversionRate:
-          page.visitors > 0
-            ? (Number(page.conversions) / Number(page.visitors)) * 100
-            : 0,
-      })),
+      topCampaigns: (topCampaigns as any[]).map((campaign) => {
+        const visitors = Number(campaign.visitors) || 0;
+        const conversions = Number(campaign.conversions) || 0;
+        const revenue = Number(campaign.revenue) || 0;
+        
+        return {
+          campaign: campaign.campaign,
+          source: campaign.source,
+          medium: campaign.medium,
+          visitors,
+          conversions,
+          revenue,
+          conversionRate: visitors > 0 ? (conversions / visitors) * 100 : 0,
+        };
+      }),
+      landingPages: (landingPages as any[]).map((page) => {
+        const visitors = Number(page.visitors) || 0;
+        const conversions = Number(page.conversions) || 0;
+        const revenue = Number(page.revenue) || 0;
+        
+        return {
+          url: page.landingPage,
+          visitors,
+          conversions,
+          revenue,
+          conversionRate: visitors > 0 ? (conversions / visitors) * 100 : 0,
+        };
+      }),
     });
   } catch (error) {
     console.error("[TRAFFIC_SOURCES_ERROR]", error);

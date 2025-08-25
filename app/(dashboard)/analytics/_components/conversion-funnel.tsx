@@ -62,31 +62,31 @@ export function ConversionFunnel() {
   const steps = [
     {
       name: "Visualizações de Página",
-      value: data.pageViews,
+      value: data.pageViews || 0,
       color: "bg-blue-500",
       icon: "👁️",
     },
     {
       name: "Conteúdo Visualizado",
-      value: data.viewContent,
+      value: data.viewContent || 0,
       color: "bg-green-500",
       icon: "📄",
     },
     {
       name: "Checkout Iniciado",
-      value: data.initiateCheckout,
+      value: data.initiateCheckout || 0,
       color: "bg-yellow-500",
       icon: "🛒",
     },
     {
       name: "Pagamento Inserido",
-      value: data.addPaymentInfo,
+      value: data.addPaymentInfo || 0,
       color: "bg-orange-500",
       icon: "💳",
     },
     {
       name: "Compra Finalizada",
-      value: data.purchases,
+      value: data.purchases || 0,
       color: "bg-purple-500",
       icon: "✅",
     },
@@ -102,7 +102,7 @@ export function ConversionFunnel() {
           <p>
             Taxa geral:{" "}
             <Badge variant="secondary">
-              {data.conversionRates.overallConversion.toFixed(2)}%
+              {(data.conversionRates?.overallConversion || 0).toFixed(2)}%
             </Badge>
           </p>
         </div>
@@ -112,7 +112,7 @@ export function ConversionFunnel() {
           {steps.map((step, index) => {
             const percentage = maxValue > 0 ? (step.value / maxValue) * 100 : 0;
             const dropRate =
-              index > 0
+              index > 0 && steps[index - 1].value > 0
                 ? ((steps[index - 1].value - step.value) /
                     steps[index - 1].value) *
                   100
@@ -131,17 +131,17 @@ export function ConversionFunnel() {
                     </div>
                     {index > 0 && dropRate > 0 && (
                       <div className="text-red-500 text-xs">
-                        -{dropRate.toFixed(1)}%
+                        -{(dropRate || 0).toFixed(1)}%
                       </div>
                     )}
                   </div>
                 </div>
                 <Progress value={percentage} className="h-3" />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{percentage.toFixed(1)}% do máximo</span>
-                  {index > 0 && (
+                  <span>{(percentage || 0).toFixed(1)}% do máximo</span>
+                  {index > 0 && steps[index - 1].value > 0 && (
                     <span>
-                      {((step.value / steps[index - 1].value) * 100).toFixed(1)}
+                      {(((step.value / steps[index - 1].value) * 100) || 0).toFixed(1)}
                       % do anterior
                     </span>
                   )}
@@ -156,13 +156,13 @@ export function ConversionFunnel() {
           <div className="flex justify-between text-sm">
             <span>Visualização → Checkout:</span>
             <span className="font-medium">
-              {data.conversionRates.viewToCheckout.toFixed(2)}%
+              {(data.conversionRates?.viewToCheckout || 0).toFixed(2)}%
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span>Checkout → Compra:</span>
             <span className="font-medium">
-              {data.conversionRates.checkoutToPurchase.toFixed(2)}%
+              {(data.conversionRates?.checkoutToPurchase || 0).toFixed(2)}%
             </span>
           </div>
         </div>

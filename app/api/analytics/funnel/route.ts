@@ -17,11 +17,11 @@ export async function GET(request: Request) {
     // Contar eventos por tipo (funil)
     const funnelData = await prisma.$queryRaw`
       SELECT 
-        event_type,
+        "eventType" as event_type,
         COUNT(*) as count
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
-      GROUP BY event_type
+      GROUP BY "eventType"
     `;
 
     // Converter array de resultados em objeto para facilitar o uso
