@@ -129,22 +129,8 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
               referrerPath: referrerUrl.pathname
             });
           }
-          // ✅ FALLBACK INTELIGENTE: Detectar por hostname + assumir tráfego pago
-          else {
-            // Se veio de escolatradershouse.com.br, assumir que é tráfego pago Facebook
-            // (já que essa página só é usada para tráfego pago)
-            utmSource = "facebook";
-            utmMedium = "cpc";
-            utmCampaign = "escolatradershouse_campaign";
-            
-            console.log("🎯 [PIXEL_HOSTNAME_DETECTION] Detectado por hostname:", {
-              hostname: referrerUrl.hostname,
-              path: referrerUrl.pathname,
-              assumedSource: utmSource,
-              assumedMedium: utmMedium,
-              reason: "escolatradershouse.com.br sempre é tráfego pago"
-            });
-          }
+          // ❌ REMOVIDO: Não assumir mais que escolatradershouse.com.br = tráfego pago
+          // Deixar que siga o fluxo normal de detecção de referrer
         }
         
         // Salvar UTMs encontrados
