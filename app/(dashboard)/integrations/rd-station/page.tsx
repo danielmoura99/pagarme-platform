@@ -145,6 +145,8 @@ export default function RDStationPage() {
       
       // Verificar modo de autenticação primeiro
       const authResponse = await fetch('/api/integrations/rd-station/simple-auth');
+      let shouldLoadConfig = false;
+      
       if (authResponse.ok) {
         const authData = await authResponse.json();
         console.log("[RD_STATION_LOADCONFIG_AUTH]", authData);
@@ -153,11 +155,12 @@ export default function RDStationPage() {
         // Se tem modo configurado, mostrar interface OAuth se for oauth
         if (authData.mode === 'oauth') {
           setShowOAuthConfig(true);
+          shouldLoadConfig = true;
         }
       }
       
-      // Carregar config OAuth se aplicável
-      if (authMode === 'oauth' || showOAuthConfig) {
+      // Carregar config OAuth sempre se for modo oauth
+      if (shouldLoadConfig || showOAuthConfig) {
         console.log("[RD_STATION_LOADCONFIG_FETCHING] Buscando config...");
         const response = await fetch('/api/integrations/rd-station/config');
         if (response.ok) {
@@ -170,7 +173,7 @@ export default function RDStationPage() {
           console.error("[RD_STATION_LOADCONFIG_ERROR] Response não ok:", response.status);
         }
       } else {
-        console.log("[RD_STATION_LOADCONFIG_SKIP] Pulando config OAuth, modo:", authMode);
+        console.log("[RD_STATION_LOADCONFIG_SKIP] Pulando config OAuth, shouldLoadConfig:", shouldLoadConfig, "showOAuthConfig:", showOAuthConfig);
       }
     } catch (error) {
       console.error('Failed to load RD Station config:', error);
