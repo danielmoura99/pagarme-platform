@@ -86,16 +86,22 @@ export default function RDStationPage() {
 
   useEffect(() => {
     const handleCallbackAndLoad = async () => {
+      console.log("[RD_STATION_FRONTEND_START] URL atual:", window.location.href);
+      
       // Verificar parâmetros de URL para mensagens de callback PRIMEIRO
       const urlParams = new URLSearchParams(window.location.search);
       const success = urlParams.get('success');
       const error = urlParams.get('error');
       const message = urlParams.get('message');
 
+      console.log("[RD_STATION_FRONTEND_PARAMS]", { success, error, message });
+
       if (success === 'connected') {
+        console.log("[RD_STATION_FRONTEND_SUCCESS] Processando sucesso...");
         toast.success("RD Station conectado com sucesso!");
         // Limpar parâmetros da URL
         window.history.replaceState({}, '', window.location.pathname);
+        console.log("[RD_STATION_FRONTEND_SUCCESS] Chamando loadConfig...");
         // Carregar config APÓS processar o sucesso
         await loadConfig();
       } else if (error) {
@@ -123,6 +129,7 @@ export default function RDStationPage() {
         // Carregar config mesmo com erro
         await loadConfig();
       } else {
+        console.log("[RD_STATION_FRONTEND_NORMAL] Sem parâmetros de callback, carregando config normal...");
         // Sem parâmetros de callback, apenas carregar config normal
         await loadConfig();
       }
@@ -133,12 +140,14 @@ export default function RDStationPage() {
 
   const loadConfig = async () => {
     try {
+      console.log("[RD_STATION_LOADCONFIG_START]");
       setIsLoading(true);
       
       // Verificar modo de autenticação primeiro
       const authResponse = await fetch('/api/integrations/rd-station/simple-auth');
       if (authResponse.ok) {
         const authData = await authResponse.json();
+        console.log("[RD_STATION_LOADCONFIG_AUTH]", authData);
         setAuthMode(authData.mode);
         
         // Se tem modo configurado, mostrar interface OAuth se for oauth
@@ -149,12 +158,19 @@ export default function RDStationPage() {
       
       // Carregar config OAuth se aplicável
       if (authMode === 'oauth' || showOAuthConfig) {
+        console.log("[RD_STATION_LOADCONFIG_FETCHING] Buscando config...");
         const response = await fetch('/api/integrations/rd-station/config');
         if (response.ok) {
           const data = await response.json();
+          console.log("[RD_STATION_LOADCONFIG_DATA]", data);
           setConfig({ ...defaultConfig, ...data });
           setIsConnected(data.isConnected);
+          console.log("[RD_STATION_LOADCONFIG_CONNECTED]", data.isConnected);
+        } else {
+          console.error("[RD_STATION_LOADCONFIG_ERROR] Response não ok:", response.status);
         }
+      } else {
+        console.log("[RD_STATION_LOADCONFIG_SKIP] Pulando config OAuth, modo:", authMode);
       }
     } catch (error) {
       console.error('Failed to load RD Station config:', error);
