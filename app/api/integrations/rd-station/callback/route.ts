@@ -11,6 +11,13 @@ export async function GET(request: Request) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
+    console.log("[RD_STATION_CALLBACK_START]", {
+      code: code ? "RECEIVED" : "MISSING",
+      state,
+      error,
+      url: request.url
+    });
+
     // Se houve erro na autorização
     if (error) {
       console.error("[RD_STATION_OAUTH_ERROR]", error);
@@ -28,7 +35,14 @@ export async function GET(request: Request) {
 
     // Buscar configuração RD Station
     const config = await prisma.rDStationConfig.findFirst();
+    console.log("[RD_STATION_CALLBACK_CONFIG]", {
+      configFound: !!config,
+      hasClientId: !!(config?.clientId),
+      hasClientSecret: !!(config?.clientSecret)
+    });
+    
     if (!config || !config.clientId || !config.clientSecret) {
+      console.error("[RD_STATION_CALLBACK_NO_CREDENTIALS]");
       return NextResponse.redirect(
         `${process.env.NEXTAUTH_URL}/integrations/rd-station?error=missing_credentials`
       );
@@ -58,6 +72,12 @@ export async function GET(request: Request) {
 
     const tokenData = await tokenResponse.json();
     const { access_token, refresh_token, expires_in } = tokenData;
+    
+    console.log("[RD_STATION_CALLBACK_TOKENS]", {
+      hasAccessToken: !!access_token,
+      hasRefreshToken: !!refresh_token,
+      expiresIn: expires_in
+    });
 
     // Calcular data de expiração
     const expiresAt = new Date(Date.now() + (expires_in * 1000));
@@ -72,6 +92,11 @@ export async function GET(request: Request) {
         enabled: true, // Habilitar automaticamente após conexão bem-sucedida
         updatedAt: new Date()
       }
+    });
+
+    console.log("[RD_STATION_CALLBACK_SUCCESS]", {
+      tokensStored: true,
+      redirectingTo: `${process.env.NEXTAUTH_URL}/integrations/rd-station?success=connected`
     });
 
     // Redirecionar de volta para a página de configuração com sucesso
