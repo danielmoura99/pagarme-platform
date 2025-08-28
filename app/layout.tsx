@@ -4,7 +4,7 @@ import { Mulish } from "next/font/google";
 import "./globals.css";
 import { NextAuthProvider } from "@/providers/auth";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 
 const mulish = Mulish({
   subsets: ["latin-ext"],

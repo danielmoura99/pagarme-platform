@@ -114,7 +114,7 @@ export default function PixelAnalyticsPage() {
         </div>
       </div>
 
-      {/* Lista de Eventos Recentes */}
+      {/* Lista de Leads e Conversões */}
       <Suspense fallback={<ChartSkeleton />}>
         <EventsList />
       </Suspense>

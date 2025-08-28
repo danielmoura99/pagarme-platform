@@ -15,6 +15,7 @@ import {
   LogOut,
   Lock,
   ChartColumnIncreasingIcon,
+  Plug,
 } from "lucide-react";
 //import { NavUser } from "@/components/nav-user";
 import {
@@ -81,6 +82,12 @@ const mainMenuItems = [
     title: "Analytics",
     url: "/analytics",
     icon: ChartColumnIncreasingIcon,
+    disabled: false,
+  },
+  {
+    title: "Integrações",
+    url: "/integrations",
+    icon: Plug,
     disabled: false,
   },
 ];

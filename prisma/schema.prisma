@@ -60,6 +60,10 @@ model PixelEventLog {
   @@index([createdAt])
   @@index([source])
   @@index([campaign])
+  @@index([pixelConfigId, eventType, createdAt])
+  @@index([orderId, eventType])
+  @@index([sessionId, eventType])
+  @@index([sessionId, pixelConfigId, eventType])
 }
 
 model PixelConfig {
@@ -101,6 +105,7 @@ model Product {
   splitConfigurationId String?
   splitConfiguration   SplitConfiguration? @relation(fields: [splitConfigurationId], references: [id])
   pixelConfigs PixelConfig[]
+  rdStationConfig RDStationProductConfig?
 }
 
 model Price {
@@ -274,4 +279,103 @@ model SplitRecipient {
   updatedAt           DateTime @updatedAt
 }
 
+// ===== INTEGRAÇÃO RD STATION =====
+
+// Configurações globais do RD Station
+model RDStationConfig {
+  id           String   @id @default(cuid())
+  enabled      Boolean  @default(false)
+  
+  // Credenciais OAuth
+  clientId     String?
+  clientSecret String?
+  accessToken  String?
+  refreshToken String?
+  tokenExpiresAt DateTime?
+  
+  // Configurações de sincronização
+  syncEvents   Json     @default("[]") // ["pageView", "viewContent", "initiateCheckout", "addPaymentInfo", "purchase"]
+  leadMapping  Json     @default("{}") // { "email": true, "name": true, "phone": true, "utmSource": true, ... }
+  
+  // Configurações avançadas
+  autoSync     Boolean  @default(true)  // Sincronização automática
+  syncInterval Int      @default(300)   // Intervalo em segundos
+  batchSize    Int      @default(50)    // Tamanho do lote para sync
+  
+  // Metadados
+  lastSyncAt   DateTime?
+  totalSynced  Int      @default(0)
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relacionamentos
+  syncLogs     RDStationSyncLog[]
+  
+  @@map("rd_station_config")
+}
+
+// Log de sincronizações com RD Station
+model RDStationSyncLog {
+  id             String   @id @default(cuid())
+  configId       String   // Referência à configuração
+  config         RDStationConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  
+  // Dados do evento
+  pixelEventId   String?  // Referência ao PixelEventLog (opcional)
+  eventType      String   // Tipo do evento original
+  rdEventType    String   // Tipo mapeado para RD Station
+  
+  // Dados enviados
+  leadEmail      String?  // Email do lead
+  leadData       Json?    // Dados completos enviados
+  
+  // Status da sincronização
+  status         String   // "pending", "success", "error", "retrying"
+  attempts       Int      @default(1)
+  maxRetries     Int      @default(3)
+  
+  // Resposta da API
+  rdStationId    String?  // ID retornado pelo RD Station
+  response       Json?    // Resposta completa da API
+  errorMessage   String?  // Mensagem de erro se houver
+  errorCode      String?  // Código de erro específico
+  
+  // Timestamps
+  scheduledAt    DateTime @default(now())  // Quando foi agendado
+  processedAt    DateTime?                 // Quando foi processado
+  createdAt      DateTime @default(now())
+  
+  // Índices para performance
+  @@index([configId])
+  @@index([status])
+  @@index([pixelEventId])
+  @@index([leadEmail])
+  @@index([scheduledAt])
+  @@index([rdEventType])
+  @@map("rd_station_sync_log")
+}
+
+// Configurações específicas por produto (opcional)
+model RDStationProductConfig {
+  id           String  @id @default(cuid())
+  productId    String
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  // Configurações específicas
+  enabled      Boolean @default(true)
+  customTags   Json?   @default("[]") // Tags específicas para este produto
+  customFields Json?   @default("{}") // Campos customizados
+  
+  // Mapeamentos específicos
+  eventMapping Json?   @default("{}") // Mapeamento de eventos específico
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@unique([productId])
+  @@map("rd_station_product_config")
+}
 

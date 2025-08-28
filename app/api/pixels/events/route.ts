@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
+import { PixelEventDeduplicator } from "@/lib/pixel-deduplication";
 
 export async function POST(request: Request) {
   try {
@@ -43,7 +44,36 @@ export async function POST(request: Request) {
       ? forwarded.split(",")[0]
       : headersList.get("x-real-ip");
 
-    // ✅ REGISTRAR O EVENTO COM TODOS OS CAMPOS
+    // ✅ VERIFICAR DUPLICATAS USANDO A CLASSE DEDICADA
+    const duplicateCheck = await PixelEventDeduplicator.checkForDuplicate({
+      pixelConfigId,
+      eventType,
+      orderId,
+      sessionId,
+      ipAddress,
+      userAgent,
+    });
+
+    if (duplicateCheck.isDuplicate) {
+      console.log("[PIXEL_EVENT_DUPLICATE_DETECTED]", {
+        eventType,
+        orderId,
+        sessionId,
+        existingId: duplicateCheck.existingEvent?.id,
+        strategy: duplicateCheck.strategy,
+        timeDiff: Date.now() - duplicateCheck.existingEvent?.createdAt.getTime(),
+      });
+
+      // Retornar o evento existente com informação de duplicata
+      return NextResponse.json({
+        ...duplicateCheck.existingEvent,
+        duplicate: true,
+        deduplicationStrategy: duplicateCheck.strategy,
+        message: `Event already exists (detected via ${duplicateCheck.strategy}), skipping duplicate`,
+      });
+    }
+
+    // ✅ REGISTRAR O EVENTO COM TODOS OS CAMPOS (APENAS SE NÃO FOR DUPLICATA)
     const pixelEventLog = await prisma.pixelEventLog.create({
       data: {
         pixelConfigId,

@@ -9,6 +9,8 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") || "30");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "20");
 
     // Calcular data de início
     const fromDate = new Date();
@@ -86,14 +88,36 @@ export async function GET(request: Request) {
       },
     });
 
-    // Eventos recentes com informações do pixel e produto
-    const recentEvents = await prisma.pixelEventLog.findMany({
-      take: 10,
-      orderBy: { createdAt: "desc" },
+    // Contar total de eventos para paginação
+    const totalCount = await prisma.pixelEventLog.count({
       where: {
         createdAt: {
           gte: fromDate,
         },
+        OR: [
+          { orderId: { not: null } }, // Eventos com pedidos
+          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } } // Eventos importantes
+        ]
+      }
+    });
+
+    // Calcular paginação
+    const totalPages = Math.ceil(totalCount / limit);
+    const skip = (page - 1) * limit;
+
+    // Eventos com dados de leads (do mais novo para o mais antigo)
+    const leadEvents = await prisma.pixelEventLog.findMany({
+      take: limit,
+      skip: skip,
+      orderBy: { createdAt: "desc" }, // Do mais novo para o mais antigo
+      where: {
+        createdAt: {
+          gte: fromDate,
+        },
+        OR: [
+          { orderId: { not: null } }, // Eventos com pedidos
+          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } } // Eventos importantes
+        ]
       },
       include: {
         pixelConfig: {
@@ -109,6 +133,32 @@ export async function GET(request: Request) {
         },
       },
     });
+
+    // Buscar dados dos pedidos para os eventos que têm orderId
+    const orderIds = leadEvents
+      .map(event => event.orderId)
+      .filter(Boolean) as string[];
+
+    const orders = orderIds.length > 0 ? await prisma.order.findMany({
+      where: {
+        id: { in: orderIds }
+      },
+      include: {
+        customer: {
+          select: {
+            name: true,
+            email: true,
+            document: true
+          }
+        }
+      }
+    }) : [];
+
+    // Criar um mapa de pedidos para facilitar o lookup
+    const orderMap = orders.reduce((acc, order) => {
+      acc[order.id] = order;
+      return acc;
+    }, {} as Record<string, typeof orders[0]>);
 
     // Top produtos por conversões - corrigindo nomes das colunas
     const topProducts = await prisma.$queryRaw`
@@ -167,22 +217,44 @@ export async function GET(request: Request) {
         conversions: Number(item.conversions),
         revenue: Number(item.revenue),
       })),
-      recentEvents: recentEvents.map((event) => ({
-        id: event.id,
-        eventType: event.eventType,
-        platform: event.pixelConfig.platform,
-        productName: event.pixelConfig.product.name,
-        timestamp: event.createdAt,
-        data: event.eventData,
-        value: (() => {
-          try {
-            const data = event.eventData as any;
-            return data?.value || null;
-          } catch {
-            return null;
-          }
-        })(),
-      })),
+      // Dados de paginação
+      totalCount,
+      currentPage: page,
+      totalPages,
+      leadEvents: leadEvents.map((event) => {
+        const order = event.orderId ? orderMap[event.orderId] : null;
+        const eventData = event.eventData as any;
+        
+        return {
+          id: event.id,
+          eventType: event.eventType,
+          platform: event.pixelConfig.platform,
+          productName: event.pixelConfig.product.name,
+          timestamp: event.createdAt,
+          data: eventData,
+          value: (() => {
+            try {
+              return eventData?.value || null;
+            } catch {
+              return null;
+            }
+          })(),
+          // Dados do lead/cliente
+          customerName: order?.customer?.name || null,
+          customerEmail: order?.customer?.email || null,
+          customerDocument: order?.customer?.document || null,
+          // Dados do pedido
+          orderId: event.orderId,
+          orderStatus: order?.status || null,
+          paymentMethod: order?.paymentMethod || null,
+          installments: order?.installments || null,
+          // Dados de tracking
+          source: event.source || null,
+          campaign: event.campaign || null,
+          medium: event.medium || null,
+          referrer: event.referrer || null,
+        };
+      }),
     });
   } catch (error) {
     console.error("[ANALYTICS_ERROR]", error);
@@ -206,7 +278,10 @@ export async function GET(request: Request) {
           pixelsByPlatform: [],
         },
         topProducts: [],
-        recentEvents: [],
+        totalCount: 0,
+        currentPage: 1,
+        totalPages: 1,
+        leadEvents: [],
       },
       { status: 500 }
     );
