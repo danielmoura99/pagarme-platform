@@ -31,10 +31,11 @@ interface ImportStats {
 }
 
 interface ImportHistory {
-  id: string;
-  timestamp: string;
-  stats: ImportStats;
-  filters: any;
+  date: string;
+  imported: number;
+  updated: number;
+  errors: number;
+  total: number;
 }
 
 export function LeadsManager() {
