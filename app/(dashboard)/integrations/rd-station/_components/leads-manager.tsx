@@ -53,14 +53,22 @@ export function LeadsManager() {
 
   const loadImportHistory = async () => {
     try {
-      // Buscar logs de importação (implementar endpoint se necessário)
+      // Buscar logs de importação 
       const response = await fetch('/api/integrations/rd-station/sync-logs?type=import');
       if (response.ok) {
         const data = await response.json();
-        setHistory(data.logs || []);
+        // ✅ Proteção adicional contra dados malformados
+        const logs = Array.isArray(data.logs) ? data.logs : [];
+        const importHistory = Array.isArray(data.importHistory) ? data.importHistory : [];
+        
+        setHistory(importHistory); // ✅ Usar importHistory ao invés de logs
+      } else {
+        console.warn('Failed to fetch import history:', response.status);
+        setHistory([]); // ✅ Fallback para array vazio
       }
     } catch (error) {
       console.error('Failed to load import history:', error);
+      setHistory([]); // ✅ Fallback para array vazio em caso de erro
     }
   };
 
@@ -283,26 +291,26 @@ export function LeadsManager() {
                 <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <p className="text-sm font-medium">
-                      {new Date(item.timestamp).toLocaleDateString("pt-BR")} às{" "}
-                      {new Date(item.timestamp).toLocaleTimeString("pt-BR")}
+                      {/* ✅ Proteção para date string e fallback */}
+                      {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : 'Data inválida'}
                     </p>
                     <div className="flex gap-2 mt-1">
                       <Badge variant="outline" className="text-xs">
-                        {item.stats?.imported || 0} novos
+                        {item.imported || 0} novos
                       </Badge>
                       <Badge variant="outline" className="text-xs">
-                        {item.stats?.updated || 0} atualizados
+                        {item.updated || 0} atualizados
                       </Badge>
-                      {item.stats?.errors > 0 && (
+                      {(item.errors || 0) > 0 && (
                         <Badge variant="destructive" className="text-xs">
-                          {item.stats.errors} erros
+                          {item.errors || 0} erros
                         </Badge>
                       )}
                     </div>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">
-                      Total: {item.stats?.total || 0} leads
+                      Total: {item.total || 0} leads
                     </p>
                   </div>
                 </div>

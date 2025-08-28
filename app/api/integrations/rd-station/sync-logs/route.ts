@@ -73,29 +73,53 @@ export async function GET(request: Request) {
       return acc;
     }, {} as Record<string, number>);
 
-    // Logs de importação agrupados por data (últimos 30 dias)
+    // Logs de importação agrupados por data (últimos 30 dias) - Usar Prisma ao invés de raw SQL
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const importHistory = await prisma.$queryRaw`
-      SELECT 
-        DATE("processedAt") as date,
-        COUNT(*) as total,
-        COUNT(CASE WHEN "eventType" = 'lead_import' THEN 1 END) as imported,
-        COUNT(CASE WHEN "eventType" = 'lead_update' THEN 1 END) as updated,
-        COUNT(CASE WHEN "status" = 'error' THEN 1 END) as errors
-      FROM "rd_station_sync_log"
-      WHERE "configId" = ${config.id}
-        AND "processedAt" >= ${thirtyDaysAgo}
-        AND ("eventType" = 'lead_import' OR "eventType" = 'lead_update')
-      GROUP BY DATE("processedAt")
-      ORDER BY date DESC
-      LIMIT 30
-    ` as any[];
+    
+    // Buscar logs de importação sem query raw para evitar erros de SQL
+    const importLogs = await prisma.rDStationSyncLog.findMany({
+      where: {
+        configId: config.id,
+        processedAt: {
+          gte: thirtyDaysAgo
+        },
+        eventType: {
+          in: ['lead_import', 'lead_update']
+        }
+      },
+      select: {
+        eventType: true,
+        status: true,
+        processedAt: true
+      },
+      orderBy: { processedAt: 'desc' },
+      take: 1000 // Limitar para performance
+    });
+
+    // Agrupar manualmente por data
+    const importHistory = importLogs.reduce((acc, log) => {
+      if (!log.processedAt) return acc;
+      
+      const date = log.processedAt.toISOString().split('T')[0];
+      if (!acc[date]) {
+        acc[date] = { date, total: 0, imported: 0, updated: 0, errors: 0 };
+      }
+      
+      acc[date].total++;
+      if (log.eventType === 'lead_import') acc[date].imported++;
+      if (log.eventType === 'lead_update') acc[date].updated++;
+      if (log.status === 'error') acc[date].errors++;
+      
+      return acc;
+    }, {} as Record<string, any>);
+
+    const importHistoryArray = Object.values(importHistory).slice(0, 30);
 
     return NextResponse.json({
       success: true,
       logs: logs.map(log => ({
         ...log,
-        timestamp: log.createdAt.toISOString(),
+        timestamp: log.createdAt?.toISOString() || new Date().toISOString(), // ✅ Proteção contra null
         stats: extractStatsFromLeadData(log.leadData)
       })),
       pagination: {
@@ -110,13 +134,7 @@ export async function GET(request: Request) {
         pending: statsMap.pending || 0,
         retrying: statsMap.retrying || 0
       },
-      importHistory: importHistory.map(item => ({
-        date: item.date,
-        imported: Number(item.imported),
-        updated: Number(item.updated),
-        errors: Number(item.errors),
-        total: Number(item.total)
-      }))
+      importHistory: importHistoryArray // ✅ Usar array processado
     });
 
   } catch (error) {
