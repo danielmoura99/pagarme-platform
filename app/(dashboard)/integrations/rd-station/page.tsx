@@ -179,8 +179,7 @@ export default function RDStationPage() {
 
       if (response.ok) {
         toast.success("Configurações salvas com sucesso");
-        // Recarregar configuração para pegar dados atualizados
-        await loadConfig();
+        // Não recarrega para manter estado atual - só conecta após OAuth
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save config');
