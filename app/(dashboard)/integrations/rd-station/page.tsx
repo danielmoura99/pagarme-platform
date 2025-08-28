@@ -85,41 +85,50 @@ export default function RDStationPage() {
   const [showOAuthConfig, setShowOAuthConfig] = useState(false);
 
   useEffect(() => {
-    loadConfig();
-    
-    // Verificar parâmetros de URL para mensagens de callback
-    const urlParams = new URLSearchParams(window.location.search);
-    const success = urlParams.get('success');
-    const error = urlParams.get('error');
-    const message = urlParams.get('message');
+    const handleCallbackAndLoad = async () => {
+      // Verificar parâmetros de URL para mensagens de callback PRIMEIRO
+      const urlParams = new URLSearchParams(window.location.search);
+      const success = urlParams.get('success');
+      const error = urlParams.get('error');
+      const message = urlParams.get('message');
 
-    if (success === 'connected') {
-      toast.success("RD Station conectado com sucesso!");
-      // Limpar parâmetros da URL
-      window.history.replaceState({}, '', window.location.pathname);
-    } else if (error) {
-      let errorMessage = "Erro na conexão com RD Station";
-      switch (error) {
-        case 'oauth_error':
-          errorMessage = message ? decodeURIComponent(message) : "Erro na autorização OAuth";
-          break;
-        case 'missing_code':
-          errorMessage = "Código de autorização não recebido";
-          break;
-        case 'missing_credentials':
-          errorMessage = "Credenciais não configuradas";
-          break;
-        case 'token_exchange_failed':
-          errorMessage = "Falha na troca de tokens";
-          break;
-        case 'callback_failed':
-          errorMessage = "Erro no callback de autorização";
-          break;
+      if (success === 'connected') {
+        toast.success("RD Station conectado com sucesso!");
+        // Limpar parâmetros da URL
+        window.history.replaceState({}, '', window.location.pathname);
+        // Carregar config APÓS processar o sucesso
+        await loadConfig();
+      } else if (error) {
+        let errorMessage = "Erro na conexão com RD Station";
+        switch (error) {
+          case 'oauth_error':
+            errorMessage = message ? decodeURIComponent(message) : "Erro na autorização OAuth";
+            break;
+          case 'missing_code':
+            errorMessage = "Código de autorização não recebido";
+            break;
+          case 'missing_credentials':
+            errorMessage = "Credenciais não configuradas";
+            break;
+          case 'token_exchange_failed':
+            errorMessage = "Falha na troca de tokens";
+            break;
+          case 'callback_failed':
+            errorMessage = "Erro no callback de autorização";
+            break;
+        }
+        toast.error(errorMessage);
+        // Limpar parâmetros da URL
+        window.history.replaceState({}, '', window.location.pathname);
+        // Carregar config mesmo com erro
+        await loadConfig();
+      } else {
+        // Sem parâmetros de callback, apenas carregar config normal
+        await loadConfig();
       }
-      toast.error(errorMessage);
-      // Limpar parâmetros da URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
+    };
+
+    handleCallbackAndLoad();
   }, []);
 
   const loadConfig = async () => {
