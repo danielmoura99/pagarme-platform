@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       eventType,
       orderId,
       sessionId,
-      ipAddress,
+      ipAddress: ipAddress || undefined,
       userAgent,
     });
 

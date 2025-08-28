@@ -163,11 +163,13 @@ async function processLead(rdLead: RDStationLead): Promise<{ action: string; cus
   });
 
   // Preparar dados do customer
+  const extractedDocument = extractDocument(rdLead.custom_fields);
+  
   const customerData = {
     email: rdLead.email,
     name: rdLead.name || rdLead.email,
-    document: extractDocument(rdLead.custom_fields),
-    phone: rdLead.mobile_phone || rdLead.personal_phone,
+    document: extractedDocument || generateDocumentFromEmail(rdLead.email), // Gerar documento se não existir
+    phone: rdLead.mobile_phone || rdLead.personal_phone || null,
   };
 
   if (existingCustomer) {
@@ -181,7 +183,9 @@ async function processLead(rdLead: RDStationLead): Promise<{ action: string; cus
       const updatedCustomer = await prisma.customer.update({
         where: { id: existingCustomer.id },
         data: {
-          ...customerData,
+          name: customerData.name,
+          document: customerData.document,
+          phone: customerData.phone,
           updatedAt: new Date()
         }
       });
@@ -194,6 +198,16 @@ async function processLead(rdLead: RDStationLead): Promise<{ action: string; cus
       return { action: 'skipped', customer: existingCustomer };
     }
   } else {
+    // Verificar se já existe um customer com o mesmo documento
+    const existingByDocument = await prisma.customer.findUnique({
+      where: { document: customerData.document }
+    });
+
+    if (existingByDocument) {
+      // Se existe customer com mesmo documento, usar um documento único
+      customerData.document = `${customerData.document}_${rdLead.uuid?.slice(-8) || Date.now()}`;
+    }
+
     // Criar novo customer
     const newCustomer = await prisma.customer.create({
       data: customerData
@@ -220,6 +234,20 @@ function extractDocument(customFields: Record<string, any> | undefined): string 
   }
   
   return undefined;
+}
+
+// Função auxiliar para gerar um documento fictício baseado no email (para evitar erros de constraint)
+function generateDocumentFromEmail(email: string): string {
+  // Gerar um "documento" baseado no hash do email para garantir unicidade
+  // Prefixo "RD_" indica que é um lead importado do RD Station
+  const emailHash = email.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  
+  // Converter para positivo e garantir que tenha 11 dígitos (formato CPF)
+  const documentNumber = Math.abs(emailHash).toString().padStart(11, '0').slice(0, 11);
+  return `RD${documentNumber}`;
 }
 
 // Função auxiliar para criar log de sincronização

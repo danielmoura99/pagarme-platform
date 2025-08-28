@@ -1,6 +1,7 @@
 // app/api/integrations/rd-station/sync/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
           // Apenas eventos com email (necessário para RD Station)
           eventData: {
             path: ['email'],
-            not: null
+            not: Prisma.DbNull
           }
         },
         orderBy: { createdAt: 'asc' },
@@ -137,7 +138,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Sincronização concluída: ${results.success} sucessos, ${results.error} erros`,
-      ...results
+      synced: results.success,
+      errors: results.error,
+      total: results.total
     });
 
   } catch (error) {
@@ -166,8 +169,8 @@ async function syncEventToRDStation(pixelEvent: any, config: any) {
         pixelEventId: pixelEvent.id,
         eventType: pixelEvent.eventType,
         rdEventType: rdEvent.event_type,
-        leadEmail: rdEvent.email,
-        leadData: rdEvent,
+        leadEmail: rdEvent.payload.email,
+        leadData: rdEvent as any,
         status: 'pending'
       }
     });
