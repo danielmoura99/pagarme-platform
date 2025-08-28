@@ -127,7 +127,7 @@ export async function GET() {
       mode: isApiKeyMode ? 'api_key' : isOAuthMode ? 'oauth' : null,
       enabled: config.enabled,
       hasApiKey: isApiKeyMode && !!config.clientSecret,
-      hasOAuthTokens: isOAuthMode
+      hasOAuthTokens: !!config.accessToken // ← CORRIGIDO: basear nos tokens, não no enabled
     });
 
   } catch (error) {
