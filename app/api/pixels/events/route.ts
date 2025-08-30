@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import { PixelEventDeduplicator } from "@/lib/pixel-deduplication";
-import { sendEventToRDStationImmediately } from "@/lib/rd-station-auto-sync";
+// import { sendEventToRDStationImmediately } from "@/lib/rd-station-auto-sync"; // Não usado mais - envio via webhook
 
 export async function POST(request: Request) {
   try {
@@ -106,29 +106,31 @@ export async function POST(request: Request) {
       landingPage,
     });
 
-    // 🚀 ENVIO IMEDIATO PARA RD STATION (assíncrono para não bloquear resposta)
-    setImmediate(async () => {
-      try {
-        const result = await sendEventToRDStationImmediately(pixelEventLog);
-        if (result.success) {
-          console.log("[RD_STATION_IMMEDIATE_SYNC_SUCCESS]", {
-            pixelEventId: pixelEventLog.id,
-            eventType: pixelEventLog.eventType
-          });
-        } else {
-          console.log("[RD_STATION_IMMEDIATE_SYNC_SKIP]", {
-            pixelEventId: pixelEventLog.id,
-            eventType: pixelEventLog.eventType,
-            reason: result.reason || 'unknown'
-          });
-        }
-      } catch (error) {
-        console.error("[RD_STATION_IMMEDIATE_SYNC_ERROR]", {
-          pixelEventId: pixelEventLog.id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
+    // 🚀 ENVIO DESABILITADO - Agora enviamos apenas via webhook quando venda é confirmada
+    // setImmediate(async () => {
+    //   try {
+    //     const result = await sendEventToRDStationImmediately(pixelEventLog);
+    //     if (result.success) {
+    //       console.log("[RD_STATION_IMMEDIATE_SYNC_SUCCESS]", {
+    //         pixelEventId: pixelEventLog.id,
+    //         eventType: pixelEventLog.eventType
+    //       });
+    //     } else {
+    //       console.log("[RD_STATION_IMMEDIATE_SYNC_SKIP]", {
+    //         pixelEventId: pixelEventLog.id,
+    //         eventType: pixelEventLog.eventType,
+    //         reason: result.reason || 'unknown'
+    //       });
+    //     }
+    //   } catch (error) {
+    //     console.error("[RD_STATION_IMMEDIATE_SYNC_ERROR]", {
+    //       pixelEventId: pixelEventLog.id,
+    //       error: error instanceof Error ? error.message : 'Unknown error'
+    //     });
+    //   }
+    // });
+    
+    console.log("[RD_STATION_SYNC] Pixel event registrado, envio via webhook quando venda confirmada");
 
     return NextResponse.json(pixelEventLog);
   } catch (error) {

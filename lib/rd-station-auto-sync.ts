@@ -23,6 +23,220 @@ interface RDStationEvent {
 }
 
 // Função para envio imediato ao RD Station
+// Nova função específica para envio de compras confirmadas
+export async function sendPurchaseToRDStation(purchaseData: {
+  email: string;
+  name?: string;
+  phone?: string;
+  orderId: string;
+  amount: number;
+  productName?: string;
+  customerData?: any;
+}) {
+  try {
+    // Buscar configuração RD Station
+    const config = await prisma.rDStationConfig.findFirst();
+
+    if (!config || !config.enabled) {
+      console.log("[RD_STATION_PURCHASE_SYNC] RD Station não configurado ou desabilitado");
+      return { success: false, reason: "not_configured" };
+    }
+
+    // Verificar se tem credenciais (OAuth ou API Key)
+    const isApiKeyMode = config.clientId === "API_KEY_MODE";
+    const hasValidAuth = isApiKeyMode 
+      ? !!config.clientSecret 
+      : !!(config.accessToken && (!config.tokenExpiresAt || config.tokenExpiresAt > new Date()));
+
+    if (!hasValidAuth) {
+      console.log("[RD_STATION_PURCHASE_SYNC] Credenciais inválidas ou token expirado");
+      return { success: false, reason: "invalid_credentials" };
+    }
+
+    // Buscar UTMs dos pixel events relacionados ao email do cliente
+    let utmData = null;
+    try {
+      // Buscar o pixel event mais recente deste email (últimas 24h)
+      const recentPixelEvent = await prisma.pixelEventLog.findFirst({
+        where: {
+          eventData: {
+            path: ['email'],
+            equals: purchaseData.email
+          },
+          createdAt: {
+            gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Últimas 24h
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          source: true,
+          medium: true,
+          campaign: true,
+          term: true,
+          content: true,
+          referrer: true,
+          landingPage: true
+        }
+      });
+
+      utmData = recentPixelEvent;
+      console.log("[RD_STATION_PURCHASE_SYNC] UTMs encontrados:", utmData);
+    } catch (error) {
+      console.warn("[RD_STATION_PURCHASE_SYNC] Erro ao buscar UTMs:", error);
+    }
+
+    // Preparar evento de compra confirmada com UTMs
+    const payload: any = {
+      email: purchaseData.email,
+      conversion_identifier: "Compra Realizada",
+      name: purchaseData.name || purchaseData.email,
+      mobile_phone: purchaseData.phone || undefined,
+      cf_purchase_value: purchaseData.amount / 100, // Converter centavos para reais
+      cf_currency: "BRL",
+      cf_order_id: purchaseData.orderId,
+      cf_product_name: purchaseData.productName || "Produto Digital",
+    };
+
+    // Adicionar UTMs como campos customizados se disponíveis
+    if (utmData) {
+      if (utmData.source) payload.cf_utm_source = utmData.source;
+      if (utmData.medium) payload.cf_utm_medium = utmData.medium;
+      if (utmData.campaign) payload.cf_utm_campaign = utmData.campaign;
+      if (utmData.term) payload.cf_utm_term = utmData.term;
+      if (utmData.content) payload.cf_utm_content = utmData.content;
+      if (utmData.referrer) payload.cf_referrer = utmData.referrer;
+      if (utmData.landingPage) payload.cf_landing_page = utmData.landingPage;
+    }
+
+    // Tags dinâmicas baseadas na fonte
+    const tags = ["Paystep", "compra_confirmada", "cliente_pagante"];
+    if (utmData?.source) {
+      tags.push(`origem_${utmData.source}`);
+    }
+    if (utmData?.medium) {
+      tags.push(`meio_${utmData.medium}`);
+    }
+    if (utmData?.campaign) {
+      tags.push(`campanha_${utmData.campaign.toLowerCase().replace(/\s+/g, '_')}`);
+    }
+
+    payload.tags = tags;
+
+    const rdEvent = {
+      event_type: "CONVERSION",
+      event_family: "CDP",
+      payload
+    };
+
+    // Criar log de sincronização
+    const syncLog = await prisma.rDStationSyncLog.create({
+      data: {
+        configId: config.id,
+        eventType: "Purchase_Confirmed",
+        rdEventType: rdEvent.event_type,
+        leadEmail: rdEvent.payload.email,
+        leadData: {
+          ...rdEvent,
+          source: "webhook_pagarme",
+          orderId: purchaseData.orderId
+        } as any,
+        status: "pending",
+      },
+    });
+
+    // Enviar para RD Station
+    let response;
+    if (isApiKeyMode) {
+      // Usar API Key (modo conversões)
+      const rdEventWithApiKey = {
+        ...rdEvent,
+        api_key: config.clientSecret,
+      };
+
+      response = await fetch("https://api.rd.services/platform/conversions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(rdEventWithApiKey),
+      });
+    } else {
+      // Usar OAuth (modo completo)
+      response = await fetch("https://api.rd.services/platform/events", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(rdEvent),
+      });
+    }
+
+    const responseData = await response.text();
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseData);
+    } catch {
+      parsedResponse = { raw_response: responseData };
+    }
+
+    if (response.ok) {
+      // Sincronização bem-sucedida
+      await prisma.rDStationSyncLog.update({
+        where: { id: syncLog.id },
+        data: {
+          status: "success",
+          response: parsedResponse,
+          processedAt: new Date(),
+        },
+      });
+
+      // Marcar como oportunidade se não for modo API Key
+      if (!isApiKeyMode) {
+        try {
+          await markAsOpportunity({
+            eventData: { email: purchaseData.email }
+          }, config);
+        } catch (error) {
+          console.warn("[RD_STATION_PURCHASE_OPPORTUNITY_WARNING]", error);
+        }
+      }
+
+      console.log("[RD_STATION_PURCHASE_SYNC] Sucesso:", {
+        orderId: purchaseData.orderId,
+        email: purchaseData.email
+      });
+      
+      return { success: true, response: parsedResponse };
+    } else {
+      // Erro na sincronização
+      await prisma.rDStationSyncLog.update({
+        where: { id: syncLog.id },
+        data: {
+          status: "error",
+          response: parsedResponse,
+          errorMessage: parsedResponse?.message || `HTTP ${response.status}`,
+          errorCode: parsedResponse?.error_code || response.status.toString(),
+          processedAt: new Date(),
+        },
+      });
+
+      console.error("[RD_STATION_PURCHASE_SYNC] Erro:", {
+        orderId: purchaseData.orderId,
+        error: parsedResponse
+      });
+      
+      return { success: false, error: parsedResponse };
+    }
+  } catch (error) {
+    console.error("[RD_STATION_PURCHASE_SYNC] Exceção:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
 export async function sendEventToRDStationImmediately(pixelEventLog: any) {
   try {
     // Buscar configuração RD Station

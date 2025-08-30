@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
+import { sendPurchaseToRDStation } from "@/lib/rd-station-auto-sync";
 
 export async function POST(req: Request) {
   try {
@@ -109,6 +110,51 @@ async function handleOrderPaid(data: any) {
           });
           console.log("[HANDLE_ORDER_PAID] Uso do cupom incrementado");
         }
+
+        // 🚀 ENVIAR PARA RD STATION (assíncrono para não bloquear webhook)
+        setImmediate(async () => {
+          try {
+            // Buscar dados do produto para envio
+            const orderWithProduct = await prisma.order.findUnique({
+              where: { id: updatedOrder.id },
+              include: {
+                customer: true,
+                items: {
+                  include: {
+                    product: true
+                  }
+                }
+              }
+            });
+
+            if (orderWithProduct?.customer && orderWithProduct.items.length > 0) {
+              const product = orderWithProduct.items[0].product;
+              
+              const result = await sendPurchaseToRDStation({
+                email: orderWithProduct.customer.email,
+                name: orderWithProduct.customer.name,
+                phone: orderWithProduct.customer.phone || undefined,
+                orderId: orderWithProduct.id,
+                amount: orderWithProduct.amount,
+                productName: product.name,
+              });
+
+              if (result.success) {
+                console.log("[HANDLE_ORDER_PAID] RD Station sync success:", {
+                  orderId: orderWithProduct.id,
+                  email: orderWithProduct.customer.email
+                });
+              } else {
+                console.log("[HANDLE_ORDER_PAID] RD Station sync failed:", {
+                  orderId: orderWithProduct.id,
+                  reason: result.reason || result.error
+                });
+              }
+            }
+          } catch (rdError) {
+            console.error("[HANDLE_ORDER_PAID] RD Station sync error:", rdError);
+          }
+        });
       } else {
         console.error(
           "[HANDLE_ORDER_PAID_ERROR] Pedido não encontrado com pagarmeTransactionId:",
@@ -144,6 +190,44 @@ async function handleOrderPaid(data: any) {
               },
             });
           }
+
+          // 🚀 ENVIAR PARA RD STATION (fallback)
+          setImmediate(async () => {
+            try {
+              const orderWithProduct = await prisma.order.findUnique({
+                where: { id: fallbackOrder.id },
+                include: {
+                  customer: true,
+                  items: {
+                    include: {
+                      product: true
+                    }
+                  }
+                }
+              });
+
+              if (orderWithProduct?.customer && orderWithProduct.items.length > 0) {
+                const product = orderWithProduct.items[0].product;
+                
+                const result = await sendPurchaseToRDStation({
+                  email: orderWithProduct.customer.email,
+                  name: orderWithProduct.customer.name,
+                  phone: orderWithProduct.customer.phone || undefined,
+                  orderId: orderWithProduct.id,
+                  amount: orderWithProduct.amount,
+                  productName: product.name,
+                });
+
+                console.log("[HANDLE_ORDER_PAID_FALLBACK] RD Station sync result:", {
+                  orderId: orderWithProduct.id,
+                  success: result.success,
+                  reason: result.reason || result.error
+                });
+              }
+            } catch (rdError) {
+              console.error("[HANDLE_ORDER_PAID_FALLBACK] RD Station sync error:", rdError);
+            }
+          });
         } catch (fallbackError) {
           console.error(
             "[HANDLE_ORDER_PAID_ERROR] Falha na busca alternativa:",
