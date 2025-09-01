@@ -388,8 +388,50 @@ export async function sendEventToRDStationImmediately(pixelEventLog: any) {
     }
 
     // Verificar se o evento deve ser sincronizado
-    const syncEvents = config.syncEvents as string[];
-    if (!syncEvents.includes(pixelEventLog.eventType)) {
+    let syncEvents: string[] = [];
+    try {
+      // Garantir que syncEvents seja sempre um array
+      if (Array.isArray(config.syncEvents)) {
+        syncEvents = config.syncEvents as string[];
+      } else if (typeof config.syncEvents === 'string') {
+        syncEvents = JSON.parse(config.syncEvents);
+      } else if (config.syncEvents && typeof config.syncEvents === 'object') {
+        syncEvents = Object.values(config.syncEvents).filter(v => typeof v === 'string') as string[];
+      } else {
+        syncEvents = [];
+      }
+      
+      // Garantir que é um array válido
+      if (!Array.isArray(syncEvents)) {
+        syncEvents = [];
+      }
+    } catch (error) {
+      console.warn("[RD_STATION_AUTO_SYNC] Erro ao parsear syncEvents, usando padrão:", error);
+      syncEvents = ["purchase", "initiateCheckout", "addPaymentInfo"]; // Eventos padrão (minúsculas)
+    }
+
+    // Normalizar nome do evento (PascalCase para camelCase)
+    const normalizeEventType = (eventType: string): string => {
+      const eventMap: { [key: string]: string } = {
+        'Purchase': 'purchase',
+        'InitiateCheckout': 'initiateCheckout', 
+        'AddPaymentInfo': 'addPaymentInfo',
+        'ViewContent': 'viewContent',
+        'PageView': 'pageView'
+      };
+      return eventMap[eventType] || eventType.toLowerCase();
+    };
+
+    const normalizedEventType = normalizeEventType(pixelEventLog.eventType);
+
+    console.log("[RD_STATION_AUTO_SYNC] Eventos configurados para sync:", {
+      syncEvents,
+      originalEventType: pixelEventLog.eventType,
+      normalizedEventType,
+      isConfigured: syncEvents.includes(normalizedEventType)
+    });
+
+    if (!syncEvents.includes(normalizedEventType)) {
       console.log(
         "[RD_STATION_AUTO_SYNC] Tipo de evento não configurado para sync:",
         pixelEventLog.eventType
