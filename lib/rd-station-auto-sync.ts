@@ -407,7 +407,29 @@ export async function sendEventToRDStationImmediately(pixelEventLog: any) {
       }
     } catch (error) {
       console.warn("[RD_STATION_AUTO_SYNC] Erro ao parsear syncEvents, usando padrão:", error);
-      syncEvents = ["purchase", "initiateCheckout", "addPaymentInfo"]; // Eventos padrão (minúsculas)
+      syncEvents = [];
+    }
+
+    // Se syncEvents estiver vazio, usar eventos padrão e corrigir no banco
+    if (syncEvents.length === 0) {
+      console.warn("[RD_STATION_AUTO_SYNC] syncEvents vazio, usando eventos padrão e corrigindo no banco");
+      syncEvents = ["purchase", "initiateCheckout", "addPaymentInfo", "viewContent", "pageView"];
+      
+      // Corrigir configuração no banco de forma assíncrona (não bloquear o sync)
+      setImmediate(async () => {
+        try {
+          await prisma.rDStationConfig.update({
+            where: { id: config.id },
+            data: {
+              syncEvents: syncEvents,
+              updatedAt: new Date()
+            }
+          });
+          console.log("[RD_STATION_AUTO_SYNC] syncEvents corrigido no banco:", syncEvents);
+        } catch (error) {
+          console.error("[RD_STATION_AUTO_SYNC] Erro ao corrigir syncEvents no banco:", error);
+        }
+      });
     }
 
     // Normalizar nome do evento (PascalCase para camelCase)

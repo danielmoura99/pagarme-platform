@@ -14,7 +14,7 @@ export async function GET() {
       config = await prisma.rDStationConfig.create({
         data: {
           enabled: false,
-          syncEvents: ["pageView", "viewContent", "initiateCheckout", "addPaymentInfo", "purchase"],
+          syncEvents: ["purchase", "initiateCheckout", "addPaymentInfo", "viewContent", "pageView"],
           leadMapping: {
             email: true,
             name: true,
