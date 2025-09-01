@@ -2,6 +2,139 @@
 // lib/rd-station-auto-sync.ts
 import { prisma } from "@/lib/db";
 
+// Função auxiliar para renovar token de acesso
+async function refreshAccessToken(config: any) {
+  try {
+    console.log("[RD_STATION_REFRESH_TOKEN] Tentando renovar token expirado");
+
+    const refreshResponse = await fetch('https://api.rd.services/auth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        refresh_token: config.refreshToken,
+        grant_type: 'refresh_token'
+      })
+    });
+
+    if (!refreshResponse.ok) {
+      const errorText = await refreshResponse.text();
+      console.error("[RD_STATION_REFRESH_ERROR] Erro ao renovar token:", errorText);
+      return null;
+    }
+
+    const tokenData = await refreshResponse.json();
+    const { access_token, refresh_token, expires_in } = tokenData;
+    const expiresAt = new Date(Date.now() + (expires_in * 1000));
+
+    console.log("[RD_STATION_REFRESH_TOKEN] Token renovado com sucesso", {
+      expiresAt: expiresAt.toISOString(),
+      expiresInHours: Math.round(expires_in / 3600)
+    });
+
+    // Atualizar tokens no banco
+    await prisma.rDStationConfig.update({
+      where: { id: config.id },
+      data: {
+        accessToken: access_token,
+        refreshToken: refresh_token || config.refreshToken, // Manter refresh atual se novo não fornecido
+        tokenExpiresAt: expiresAt,
+        updatedAt: new Date()
+      }
+    });
+
+    return {
+      accessToken: access_token,
+      refreshToken: refresh_token || config.refreshToken,
+      tokenExpiresAt: expiresAt
+    };
+  } catch (error) {
+    console.error("[RD_STATION_REFRESH_TOKEN_ERROR]", error);
+    return null;
+  }
+}
+
+// Função para verificar e renovar token se necessário
+async function ensureValidToken(config: any) {
+  const isApiKeyMode = config.clientId === "API_KEY_MODE";
+  
+  if (isApiKeyMode) {
+    // Modo API Key não precisa renovação
+    return !!config.clientSecret;
+  }
+
+  // Verificar se token expira nos próximos 5 minutos (renovação preventiva)
+  const tokenExpiresAt = config.tokenExpiresAt;
+  const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000);
+  
+  if (!config.accessToken || !tokenExpiresAt || tokenExpiresAt <= fiveMinutesFromNow) {
+    console.log("[RD_STATION_TOKEN_CHECK] Token expirado ou expirando em breve, renovando...", {
+      hasToken: !!config.accessToken,
+      expiresAt: tokenExpiresAt?.toISOString(),
+      willExpireIn5Min: tokenExpiresAt <= fiveMinutesFromNow
+    });
+
+    if (!config.refreshToken) {
+      console.error("[RD_STATION_TOKEN_CHECK] Sem refresh_token para renovação");
+      return false;
+    }
+
+    const refreshed = await refreshAccessToken(config);
+    if (!refreshed) {
+      console.error("[RD_STATION_TOKEN_CHECK] Falha na renovação do token");
+      return false;
+    }
+
+    // Atualizar configuração local com novos tokens
+    config.accessToken = refreshed.accessToken;
+    config.refreshToken = refreshed.refreshToken;
+    config.tokenExpiresAt = refreshed.tokenExpiresAt;
+    
+    console.log("[RD_STATION_TOKEN_CHECK] Token renovado com sucesso");
+    return true;
+  }
+
+  console.log("[RD_STATION_TOKEN_CHECK] Token ainda válido", {
+    expiresAt: tokenExpiresAt.toISOString(),
+    timeLeft: Math.round((tokenExpiresAt.getTime() - Date.now()) / (1000 * 60)) + " minutos"
+  });
+  
+  return true;
+}
+
+// Função para fazer requisição com retry automático em caso de token inválido
+async function makeRDStationRequest(url: string, options: RequestInit, config: any, retryCount = 0): Promise<Response> {
+  const maxRetries = 1; // Máximo 1 retry
+  
+  const response = await fetch(url, options);
+  
+  // Se receber 401 (token inválido) e ainda pode tentar renovar
+  if (response.status === 401 && retryCount < maxRetries && config.refreshToken) {
+    console.log("[RD_STATION_REQUEST_RETRY] Token inválido, tentando renovar e refazer requisição");
+    
+    const refreshed = await refreshAccessToken(config);
+    if (refreshed) {
+      // Atualizar configuração local
+      config.accessToken = refreshed.accessToken;
+      config.refreshToken = refreshed.refreshToken;
+      config.tokenExpiresAt = refreshed.tokenExpiresAt;
+      
+      // Atualizar header da requisição com novo token
+      if (options.headers && typeof options.headers === 'object') {
+        (options.headers as any)['Authorization'] = `Bearer ${refreshed.accessToken}`;
+      }
+      
+      console.log("[RD_STATION_REQUEST_RETRY] Token renovado, refazendo requisição");
+      return makeRDStationRequest(url, options, config, retryCount + 1);
+    }
+  }
+  
+  return response;
+}
+
 interface RDStationEvent {
   event_type: string;
   event_family: string;
@@ -42,15 +175,11 @@ export async function sendPurchaseToRDStation(purchaseData: {
       return { success: false, reason: "not_configured" };
     }
 
-    // Verificar se tem credenciais (OAuth ou API Key)
-    const isApiKeyMode = config.clientId === "API_KEY_MODE";
-    const hasValidAuth = isApiKeyMode 
-      ? !!config.clientSecret 
-      : !!(config.accessToken && (!config.tokenExpiresAt || config.tokenExpiresAt > new Date()));
-
-    if (!hasValidAuth) {
-      console.log("[RD_STATION_PURCHASE_SYNC] Credenciais inválidas ou token expirado");
-      return { success: false, reason: "invalid_credentials" };
+    // Verificar e renovar token se necessário
+    const tokenIsValid = await ensureValidToken(config);
+    if (!tokenIsValid) {
+      console.log("[RD_STATION_PURCHASE_SYNC] Falha na verificação/renovação do token");
+      return { success: false, reason: "token_refresh_failed" };
     }
 
     // Buscar UTMs dos pixel events relacionados ao email do cliente
@@ -146,8 +275,10 @@ export async function sendPurchaseToRDStation(purchaseData: {
 
     // Enviar para RD Station
     let response;
+    const isApiKeyMode = config.clientId === "API_KEY_MODE";
+    
     if (isApiKeyMode) {
-      // Usar API Key (modo conversões)
+      // Usar API Key (modo conversões) - sem retry pois não usa OAuth
       const rdEventWithApiKey = {
         ...rdEvent,
         api_key: config.clientSecret,
@@ -161,15 +292,15 @@ export async function sendPurchaseToRDStation(purchaseData: {
         body: JSON.stringify(rdEventWithApiKey),
       });
     } else {
-      // Usar OAuth (modo completo)
-      response = await fetch("https://api.rd.services/platform/events", {
+      // Usar OAuth (modo completo) - com retry automático
+      response = await makeRDStationRequest("https://api.rd.services/platform/events", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(rdEvent),
-      });
+      }, config);
     }
 
     const responseData = await response.text();
@@ -242,17 +373,18 @@ export async function sendEventToRDStationImmediately(pixelEventLog: any) {
     // Buscar configuração RD Station
     const config = await prisma.rDStationConfig.findFirst();
 
-    if (!config || !config.enabled || !config.accessToken) {
+    if (!config || !config.enabled) {
       console.log(
         "[RD_STATION_AUTO_SYNC] RD Station não configurado ou desabilitado"
       );
       return { success: false, reason: "not_configured" };
     }
 
-    // Verificar se o token não expirou
-    if (config.tokenExpiresAt && config.tokenExpiresAt < new Date()) {
-      console.log("[RD_STATION_AUTO_SYNC] Token expirado");
-      return { success: false, reason: "token_expired" };
+    // Verificar e renovar token se necessário
+    const tokenIsValid = await ensureValidToken(config);
+    if (!tokenIsValid) {
+      console.log("[RD_STATION_AUTO_SYNC] Falha na verificação/renovação do token");
+      return { success: false, reason: "token_refresh_failed" };
     }
 
     // Verificar se o evento deve ser sincronizado
@@ -293,7 +425,7 @@ export async function sendEventToRDStationImmediately(pixelEventLog: any) {
 
     let response;
     if (isApiKeyMode) {
-      // Usar API Key (modo conversões)
+      // Usar API Key (modo conversões) - sem retry pois não usa OAuth
       const rdEventWithApiKey = {
         ...rdEvent,
         api_key: config.clientSecret,
@@ -307,15 +439,15 @@ export async function sendEventToRDStationImmediately(pixelEventLog: any) {
         body: JSON.stringify(rdEventWithApiKey),
       });
     } else {
-      // Usar OAuth (modo completo)
-      response = await fetch("https://api.rd.services/platform/events", {
+      // Usar OAuth (modo completo) - com retry automático
+      response = await makeRDStationRequest("https://api.rd.services/platform/events", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${config.accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(rdEvent),
-      });
+      }, config);
     }
 
     const responseData = await response.text();
@@ -515,14 +647,14 @@ async function markAsOpportunity(pixelEvent: any, config: any) {
     },
   };
 
-  const response = await fetch("https://api.rd.services/platform/events", {
+  const response = await makeRDStationRequest("https://api.rd.services/platform/events", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${config.accessToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(opportunityEvent),
-  });
+  }, config);
 
   if (!response.ok) {
     const errorText = await response.text();

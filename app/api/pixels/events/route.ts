@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import { PixelEventDeduplicator } from "@/lib/pixel-deduplication";
-// import { sendEventToRDStationImmediately } from "@/lib/rd-station-auto-sync"; // Não usado mais - envio via webhook
+import { sendEventToRDStationImmediately } from "@/lib/rd-station-auto-sync";
 
 export async function POST(request: Request) {
   try {
@@ -106,31 +106,46 @@ export async function POST(request: Request) {
       landingPage,
     });
 
-    // 🚀 ENVIO DESABILITADO - Agora enviamos apenas via webhook quando venda é confirmada
-    // setImmediate(async () => {
-    //   try {
-    //     const result = await sendEventToRDStationImmediately(pixelEventLog);
-    //     if (result.success) {
-    //       console.log("[RD_STATION_IMMEDIATE_SYNC_SUCCESS]", {
-    //         pixelEventId: pixelEventLog.id,
-    //         eventType: pixelEventLog.eventType
-    //       });
-    //     } else {
-    //       console.log("[RD_STATION_IMMEDIATE_SYNC_SKIP]", {
-    //         pixelEventId: pixelEventLog.id,
-    //         eventType: pixelEventLog.eventType,
-    //         reason: result.reason || 'unknown'
-    //       });
-    //     }
-    //   } catch (error) {
-    //     console.error("[RD_STATION_IMMEDIATE_SYNC_ERROR]", {
-    //       pixelEventId: pixelEventLog.id,
-    //       error: error instanceof Error ? error.message : 'Unknown error'
-    //     });
-    //   }
-    // });
+    // 🚀 ENVIO ESPECÍFICO PARA EVENTOS PURCHASE - Sincronizar imediatamente quando venda é registrada
+    if (eventType === "Purchase") {
+      setImmediate(async () => {
+        try {
+          console.log("[RD_STATION_PURCHASE_SYNC] Iniciando envio de Purchase para RD Station", {
+            pixelEventId: pixelEventLog.id,
+            email: eventData?.email,
+            orderId: orderId
+          });
+
+          const result = await sendEventToRDStationImmediately(pixelEventLog);
+          
+          if (result.success) {
+            console.log("[RD_STATION_PURCHASE_SYNC_SUCCESS] Purchase enviado com sucesso para RD Station", {
+              pixelEventId: pixelEventLog.id,
+              orderId: orderId,
+              email: eventData?.email
+            });
+          } else {
+            console.log("[RD_STATION_PURCHASE_SYNC_SKIP] Purchase não enviado para RD Station", {
+              pixelEventId: pixelEventLog.id,
+              orderId: orderId,
+              reason: result.reason || 'unknown'
+            });
+          }
+        } catch (error) {
+          console.error("[RD_STATION_PURCHASE_SYNC_ERROR] Erro ao enviar Purchase para RD Station", {
+            pixelEventId: pixelEventLog.id,
+            orderId: orderId,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      });
+    }
     
-    console.log("[RD_STATION_SYNC] Pixel event registrado, envio via webhook quando venda confirmada");
+    console.log("[RD_STATION_SYNC] Pixel event registrado", {
+      eventType,
+      willSyncToRD: eventType === "Purchase",
+      pixelEventId: pixelEventLog.id
+    });
 
     return NextResponse.json(pixelEventLog);
   } catch (error) {
