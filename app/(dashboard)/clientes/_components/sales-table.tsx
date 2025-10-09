@@ -1,8 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// app/(dashboard)/clientes/_components/clients-table.tsx
+// app/(dashboard)/clientes/_components/sales-table.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -22,8 +22,7 @@ import {
   FileJson,
   ChevronLeft,
   ChevronRight,
-  Users,
-  Eye,
+  ShoppingCart,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -46,43 +45,24 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { ClientDetailsModal } from "./client-details-modal";
 
-// Tipo para representar um cliente
-interface Client {
+// Tipo para representar uma venda
+interface Sale {
   id: string;
-  name: string;
-  email: string;
-  document: string;
-  phone: string | null;
-
-  // Métricas de compra
-  totalSpent: number;
-  totalOrders: number;
-  averageOrderValue: number;
-
-  // Datas importantes
-  firstPurchase: string | null;
-  lastPurchase: string | null;
-  daysSinceLastPurchase: number | null;
-
-  // Status e contadores
-  clientStatus: "active" | "inactive" | "problematic";
-  paidOrdersCount: number;
-  failedOrdersCount: number;
-  pendingOrdersCount: number;
-
-  // Informações de afiliado
-  hasAffiliateOrders: boolean;
-  affiliatesUsed: Array<{
-    id: string;
-    name: string;
-    totalOrders: number;
-  }>;
-
-  // Datas do registro
+  customerName: string;
+  customerEmail: string;
+  customerDocument: string;
+  productName: string;
+  amount: number;
+  status: string;
+  paymentMethod: string;
+  installments: number;
+  affiliateId: string | null;
+  affiliateName: string | null;
+  couponCode: string | null;
+  splitAmount: number | null;
   createdAt: string;
-  updatedAt: string;
+  pagarmeTransactionId: string | null;
 }
 
 // Tipo para paginação
@@ -98,38 +78,36 @@ interface PaginationInfo {
 }
 
 // Tipo para resposta da API
-interface ClientsResponse {
-  clients: Client[];
+interface SalesResponse {
+  sales: Sale[];
   pagination: PaginationInfo;
 }
 
-// Componente para exibir o status do cliente
-function ClientStatusBadge({ status }: { status: Client["clientStatus"] }) {
-  const statusConfig = {
-    active: {
-      label: "Ativo",
-      variant: "default" as const,
+// Componente para exibir o status da venda
+function SaleStatusBadge({ status }: { status: string }) {
+  const statusConfig: Record<string, { label: string; className: string }> = {
+    paid: {
+      label: "Pago",
       className: "bg-green-100 text-green-800 border-green-200",
     },
-    inactive: {
-      label: "Inativo",
-      variant: "secondary" as const,
-      className: "bg-gray-100 text-gray-800 border-gray-200",
+    pending: {
+      label: "Pendente",
+      className: "bg-yellow-100 text-yellow-800 border-yellow-200",
     },
-    problematic: {
-      label: "Problemático",
-      variant: "destructive" as const,
+    failed: {
+      label: "Falhou",
       className: "bg-red-100 text-red-800 border-red-200",
+    },
+    cancelled: {
+      label: "Cancelado",
+      className: "bg-gray-100 text-gray-800 border-gray-200",
     },
   };
 
-  const config = statusConfig[status];
+  const config = statusConfig[status] || statusConfig.pending;
 
   return (
-    <Badge
-      variant={config.variant}
-      className={`font-medium text-xs ${config.className}`}
-    >
+    <Badge className={`font-medium text-xs ${config.className}`}>
       {config.label}
     </Badge>
   );
@@ -148,6 +126,16 @@ function formatDocument(document: string) {
   return document.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 }
 
+// Formatar método de pagamento
+function formatPaymentMethod(method: string) {
+  const methods: Record<string, string> = {
+    credit_card: "Cartão",
+    pix: "PIX",
+    boleto: "Boleto",
+  };
+  return methods[method] || method;
+}
+
 // Tipo para representar um afiliado
 interface Affiliate {
   id: string;
@@ -157,10 +145,10 @@ interface Affiliate {
   recipientId: string | null;
 }
 
-export function ClientsTable() {
+export function SalesTable() {
   const { dateRange } = useDateRange();
   const [loading, setLoading] = useState(true);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     currentPage: 1,
@@ -175,15 +163,8 @@ export function ClientsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [affiliateFilter, setAffiliateFilter] = useState<string>("all");
-  const [sortColumn, setSortColumn] = useState<string>("lastPurchase");
+  const [sortColumn, setSortColumn] = useState<string>("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const tableRef = useRef<HTMLDivElement>(null);
-
-  // Estado para o modal de detalhes do cliente
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string | undefined>(
-    undefined
-  );
 
   // Função para buscar afiliados
   const fetchAffiliates = async () => {
@@ -198,8 +179,8 @@ export function ClientsTable() {
     }
   };
 
-  // Função para buscar clientes com paginação
-  const fetchClients = async (page = 1) => {
+  // Função para buscar vendas com paginação
+  const fetchSales = async (page = 1) => {
     try {
       setLoading(true);
 
@@ -218,18 +199,18 @@ export function ClientsTable() {
         queryParams.append("affiliate", affiliateFilter);
       }
 
-      const response = await fetch(`/api/clients?${queryParams.toString()}`);
+      const response = await fetch(`/api/sales?${queryParams.toString()}`);
 
       if (!response.ok) {
-        throw new Error("Failed to fetch clients");
+        throw new Error("Failed to fetch sales");
       }
 
-      const data: ClientsResponse = await response.json();
-      setClients(data.clients);
+      const data: SalesResponse = await response.json();
+      setSales(data.sales);
       setPagination(data.pagination);
     } catch (error) {
-      console.error("Error fetching clients:", error);
-      setClients([]);
+      console.error("Error fetching sales:", error);
+      setSales([]);
       setPagination({
         currentPage: 1,
         totalPages: 1,
@@ -248,13 +229,13 @@ export function ClientsTable() {
   // Navegação da paginação
   const handlePreviousPage = () => {
     if (pagination.hasPreviousPage) {
-      fetchClients(pagination.currentPage - 1);
+      fetchSales(pagination.currentPage - 1);
     }
   };
 
   const handleNextPage = () => {
     if (pagination.hasNextPage) {
-      fetchClients(pagination.currentPage + 1);
+      fetchSales(pagination.currentPage + 1);
     }
   };
 
@@ -265,17 +246,18 @@ export function ClientsTable() {
 
   // Resetar página quando filtros mudarem
   useEffect(() => {
-    fetchClients(1);
+    fetchSales(1);
   }, [dateRange, statusFilter, affiliateFilter]);
 
-  // Filtrar clientes localmente (sem afetar paginação)
-  const filteredClients = clients
-    .filter((client) => {
-      // Filtragem por texto (nome, email ou documento)
+  // Filtrar vendas localmente (sem afetar paginação)
+  const filteredSales = sales
+    .filter((sale) => {
+      // Filtragem por texto (nome, email, documento ou produto)
       const textMatch =
-        client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.document.includes(searchQuery.toLowerCase());
+        sale.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sale.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sale.customerDocument.includes(searchQuery.toLowerCase()) ||
+        sale.productName.toLowerCase().includes(searchQuery.toLowerCase());
 
       return textMatch;
     })
@@ -284,26 +266,21 @@ export function ClientsTable() {
       const direction = sortDirection === "asc" ? 1 : -1;
 
       switch (sortColumn) {
-        case "lastPurchase":
-          const aDate = a.lastPurchase ? new Date(a.lastPurchase).getTime() : 0;
-          const bDate = b.lastPurchase ? new Date(b.lastPurchase).getTime() : 0;
-          return direction * (aDate - bDate);
-        case "totalSpent":
-          return direction * (a.totalSpent - b.totalSpent);
-        case "totalOrders":
-          return direction * (a.totalOrders - b.totalOrders);
-        case "name":
-          return direction * a.name.localeCompare(b.name);
+        case "createdAt":
+          return (
+            direction *
+            (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+          );
+        case "amount":
+          return direction * (a.amount - b.amount);
+        case "customerName":
+          return direction * a.customerName.localeCompare(b.customerName);
+        case "productName":
+          return direction * a.productName.localeCompare(b.productName);
         default:
           return 0;
       }
     });
-
-  // Abrir o modal de detalhes do cliente
-  const handleOpenClientDetails = (clientId: string) => {
-    setSelectedClientId(clientId);
-    setIsModalOpen(true);
-  };
 
   // Exportar para CSV - busca TODOS os dados do período
   const exportToCSV = async () => {
@@ -322,42 +299,40 @@ export function ClientsTable() {
         queryParams.append("affiliate", affiliateFilter);
       }
 
-      const response = await fetch(`/api/clients?${queryParams.toString()}`);
+      const response = await fetch(`/api/sales?${queryParams.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch all clients");
+        throw new Error("Failed to fetch all sales");
       }
 
-      const data: ClientsResponse = await response.json();
-      const allClients = data.clients;
+      const data: SalesResponse = await response.json();
+      const allSales = data.sales;
 
       // Aplicar filtro de busca local (se houver)
-      const clientsToExport = allClients.filter((client) => {
+      const salesToExport = allSales.filter((sale) => {
         if (!searchQuery) return true;
         const textMatch =
-          client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.document.includes(searchQuery.toLowerCase());
+          sale.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sale.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sale.customerDocument.includes(searchQuery.toLowerCase()) ||
+          sale.productName.toLowerCase().includes(searchQuery.toLowerCase());
         return textMatch;
       });
 
       const headers = [
         "ID",
-        "Nome",
+        "Data",
+        "Cliente",
         "Email",
         "Documento",
-        "Telefone",
+        "Produto",
+        "Valor",
         "Status",
-        "Total Gasto",
-        "Total Pedidos",
-        "Ticket Médio",
-        "Primeira Compra",
-        "Última Compra",
-        "Dias desde Última Compra",
-        "Pedidos Pagos",
-        "Pedidos Falharam",
-        "Pedidos Pendentes",
-        "Tem Vendas via Afiliado",
-        "Data Cadastro",
+        "Método Pagamento",
+        "Parcelas",
+        "Afiliado",
+        "Cupom",
+        "Comissão",
+        "ID Transação",
       ];
 
       // Função auxiliar para escapar valores CSV
@@ -375,47 +350,36 @@ export function ClientsTable() {
 
       const csvRows = [
         headers.map(escapeCSV).join(","),
-        ...clientsToExport.map((client) => {
+        ...salesToExport.map((sale) => {
           return [
-            escapeCSV(client.id),
-            escapeCSV(client.name),
-            escapeCSV(client.email),
-            escapeCSV(formatDocument(client.document)),
-            escapeCSV(client.phone || "Não informado"),
+            escapeCSV(sale.id),
             escapeCSV(
-              client.clientStatus === "active"
-                ? "Ativo"
-                : client.clientStatus === "inactive"
-                  ? "Inativo"
-                  : "Problemático"
-            ),
-            formatCurrencyForCSV(client.totalSpent),
-            escapeCSV(client.totalOrders),
-            formatCurrencyForCSV(client.averageOrderValue),
-            escapeCSV(
-              client.firstPurchase
-                ? format(new Date(client.firstPurchase), "dd/MM/yyyy HH:mm", {
-                    locale: ptBR,
-                  })
-                : "N/A"
-            ),
-            escapeCSV(
-              client.lastPurchase
-                ? format(new Date(client.lastPurchase), "dd/MM/yyyy HH:mm", {
-                    locale: ptBR,
-                  })
-                : "N/A"
-            ),
-            escapeCSV(client.daysSinceLastPurchase || "N/A"),
-            escapeCSV(client.paidOrdersCount),
-            escapeCSV(client.failedOrdersCount),
-            escapeCSV(client.pendingOrdersCount),
-            escapeCSV(client.hasAffiliateOrders ? "Sim" : "Não"),
-            escapeCSV(
-              format(new Date(client.createdAt), "dd/MM/yyyy HH:mm", {
+              format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm", {
                 locale: ptBR,
               })
             ),
+            escapeCSV(sale.customerName),
+            escapeCSV(sale.customerEmail),
+            escapeCSV(formatDocument(sale.customerDocument)),
+            escapeCSV(sale.productName),
+            formatCurrencyForCSV(sale.amount),
+            escapeCSV(
+              sale.status === "paid"
+                ? "Pago"
+                : sale.status === "failed"
+                  ? "Falhou"
+                  : sale.status === "cancelled"
+                    ? "Cancelado"
+                    : "Pendente"
+            ),
+            escapeCSV(formatPaymentMethod(sale.paymentMethod)),
+            escapeCSV(sale.installments),
+            escapeCSV(sale.affiliateName || "Direto"),
+            escapeCSV(sale.couponCode || "Sem cupom"),
+            sale.splitAmount
+              ? formatCurrencyForCSV(Math.round(sale.splitAmount * 100))
+              : escapeCSV("0,00"),
+            escapeCSV(sale.pagarmeTransactionId || "N/A"),
           ].join(",");
         }),
       ].join("\n");
@@ -430,7 +394,7 @@ export function ClientsTable() {
       link.setAttribute("href", url);
       link.setAttribute(
         "download",
-        `clientes_${format(new Date(), "yyyy-MM-dd")}.csv`
+        `vendas_${format(new Date(), "yyyy-MM-dd")}.csv`
       );
       link.click();
     } catch (error) {
@@ -456,86 +420,78 @@ export function ClientsTable() {
         queryParams.append("affiliate", affiliateFilter);
       }
 
-      const response = await fetch(`/api/clients?${queryParams.toString()}`);
+      const response = await fetch(`/api/sales?${queryParams.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch all clients");
+        throw new Error("Failed to fetch all sales");
       }
 
-      const data: ClientsResponse = await response.json();
-      const allClients = data.clients;
+      const data: SalesResponse = await response.json();
+      const allSales = data.sales;
 
       // Aplicar filtro de busca local (se houver)
-      const clientsToExport = allClients.filter((client) => {
+      const salesToExport = allSales.filter((sale) => {
         if (!searchQuery) return true;
         const textMatch =
-          client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.document.includes(searchQuery.toLowerCase());
+          sale.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sale.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          sale.customerDocument.includes(searchQuery.toLowerCase()) ||
+          sale.productName.toLowerCase().includes(searchQuery.toLowerCase());
         return textMatch;
       });
 
-      const formattedData = clientsToExport.map((client) => ({
-        // Informações básicas
-        id: client.id,
-        name: client.name,
-        email: client.email,
-        document: client.document,
-        formattedDocument: formatDocument(client.document),
-        phone: client.phone || "Não informado",
+      const formattedData = salesToExport.map((sale) => ({
+        id: sale.id,
+        data: sale.createdAt,
+        dataFormatada: format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm", {
+          locale: ptBR,
+        }),
 
-        // Status e métricas
-        status: client.clientStatus,
-        statusLabel:
-          client.clientStatus === "active"
-            ? "Ativo"
-            : client.clientStatus === "inactive"
-              ? "Inativo"
-              : "Problemático",
+        // Informações do cliente
+        cliente: {
+          nome: sale.customerName,
+          email: sale.customerEmail,
+          documento: sale.customerDocument,
+          documentoFormatado: formatDocument(sale.customerDocument),
+        },
 
-        // Métricas financeiras
-        totalSpent: client.totalSpent,
-        formattedTotalSpent: formatCurrency(client.totalSpent),
-        totalOrders: client.totalOrders,
-        averageOrderValue: client.averageOrderValue,
-        formattedAverageOrderValue: formatCurrency(client.averageOrderValue),
+        // Informações do produto
+        produto: sale.productName,
 
-        // Contadores de pedidos
-        paidOrdersCount: client.paidOrdersCount,
-        failedOrdersCount: client.failedOrdersCount,
-        pendingOrdersCount: client.pendingOrdersCount,
+        // Informações financeiras
+        valor: sale.amount,
+        valorFormatado: formatCurrency(sale.amount),
+        metodoPagamento: sale.paymentMethod,
+        metodoPagamentoFormatado: formatPaymentMethod(sale.paymentMethod),
+        parcelas: sale.installments,
 
-        // Datas importantes
-        firstPurchase: client.firstPurchase,
-        formattedFirstPurchase: client.firstPurchase
-          ? format(new Date(client.firstPurchase), "dd/MM/yyyy HH:mm", {
-              locale: ptBR,
-            })
+        // Status
+        status: sale.status,
+        statusFormatado:
+          sale.status === "paid"
+            ? "Pago"
+            : sale.status === "failed"
+              ? "Falhou"
+              : sale.status === "cancelled"
+                ? "Cancelado"
+                : "Pendente",
+
+        // Afiliado
+        afiliado: sale.affiliateId
+          ? {
+              id: sale.affiliateId,
+              nome: sale.affiliateName,
+              comissao: sale.splitAmount,
+              comissaoFormatada: sale.splitAmount
+                ? formatCurrency(Math.round(sale.splitAmount * 100))
+                : "R$ 0,00",
+            }
           : null,
-        lastPurchase: client.lastPurchase,
-        formattedLastPurchase: client.lastPurchase
-          ? format(new Date(client.lastPurchase), "dd/MM/yyyy HH:mm", {
-              locale: ptBR,
-            })
-          : null,
-        daysSinceLastPurchase: client.daysSinceLastPurchase,
 
-        // Informações de afiliado
-        hasAffiliateOrders: client.hasAffiliateOrders,
-        affiliatesUsed: client.affiliatesUsed,
+        // Cupom
+        cupom: sale.couponCode,
 
-        // Datas do sistema
-        createdAt: client.createdAt,
-        formattedCreatedAt: format(
-          new Date(client.createdAt),
-          "dd/MM/yyyy HH:mm",
-          { locale: ptBR }
-        ),
-        updatedAt: client.updatedAt,
-        formattedUpdatedAt: format(
-          new Date(client.updatedAt),
-          "dd/MM/yyyy HH:mm",
-          { locale: ptBR }
-        ),
+        // ID da transação
+        transacaoId: sale.pagarmeTransactionId,
       }));
 
       const blob = new Blob([JSON.stringify(formattedData, null, 2)], {
@@ -546,7 +502,7 @@ export function ClientsTable() {
       link.setAttribute("href", url);
       link.setAttribute(
         "download",
-        `clientes_${format(new Date(), "yyyy-MM-dd")}.json`
+        `vendas_${format(new Date(), "yyyy-MM-dd")}.json`
       );
       link.click();
     } catch (error) {
@@ -584,11 +540,11 @@ export function ClientsTable() {
   );
 
   return (
-    <div className="space-y-4" ref={tableRef}>
+    <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Base de Clientes
+          <ShoppingCart className="h-5 w-5" />
+          Base de Vendas
         </h2>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -602,19 +558,22 @@ export function ClientsTable() {
                   <span className="text-xs">
                     {statusFilter === "all"
                       ? "Status"
-                      : statusFilter === "active"
-                        ? "Ativos"
-                        : statusFilter === "inactive"
-                          ? "Inativos"
-                          : "Problemáticos"}
+                      : statusFilter === "paid"
+                        ? "Pagos"
+                        : statusFilter === "failed"
+                          ? "Falhados"
+                          : statusFilter === "pending"
+                            ? "Pendentes"
+                            : "Cancelados"}
                   </span>
                 </div>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos Status</SelectItem>
-                <SelectItem value="active">Ativos</SelectItem>
-                <SelectItem value="inactive">Inativos</SelectItem>
-                <SelectItem value="problematic">Problemáticos</SelectItem>
+                <SelectItem value="paid">Pagos</SelectItem>
+                <SelectItem value="pending">Pendentes</SelectItem>
+                <SelectItem value="failed">Falhados</SelectItem>
+                <SelectItem value="cancelled">Cancelados</SelectItem>
               </SelectContent>
             </Select>
 
@@ -661,7 +620,7 @@ export function ClientsTable() {
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Buscar clientes..."
+                placeholder="Buscar vendas..."
                 className="pl-8 h-9 pr-4 bg-white"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -706,12 +665,12 @@ export function ClientsTable() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Data</TableHead>
                   <TableHead>Cliente</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Valor</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Total Gasto</TableHead>
-                  <TableHead>Pedidos</TableHead>
-                  <TableHead>Última Compra</TableHead>
-                  <TableHead>Ações</TableHead>
+                  <TableHead>Afiliado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -720,25 +679,25 @@ export function ClientsTable() {
                   .map((_, index) => (
                     <TableRow key={index}>
                       <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
                         <div className="space-y-1">
                           <Skeleton className="h-4 w-32" />
                           <Skeleton className="h-3 w-48" />
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-5 w-16 rounded-full" />
+                        <Skeleton className="h-4 w-40" />
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-4 w-20" />
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-4 w-12" />
+                        <Skeleton className="h-5 w-16 rounded-full" />
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-4 w-24" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-8 w-16" />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -746,19 +705,19 @@ export function ClientsTable() {
             </Table>
           </div>
         </Card>
-      ) : filteredClients.length === 0 ? (
+      ) : filteredSales.length === 0 ? (
         <Card className="overflow-hidden">
           <div className="text-center py-12 border rounded-md bg-muted/5">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground mb-2">
-              Nenhum cliente encontrado
+              Nenhuma venda encontrada
             </p>
             <p className="text-xs">
               {searchQuery ||
               statusFilter !== "all" ||
               affiliateFilter !== "all"
                 ? "Tente ajustar seus critérios de filtro"
-                : "Não há clientes no período selecionado"}
+                : "Não há vendas no período selecionado"}
             </p>
           </div>
         </Card>
@@ -769,94 +728,94 @@ export function ClientsTable() {
               <TableHeader className="bg-muted/10">
                 <TableRow>
                   <TableHead className="font-medium">
-                    {renderSortableHeader("Cliente", "name")}
+                    {renderSortableHeader("Data", "createdAt")}
+                  </TableHead>
+                  <TableHead className="font-medium">
+                    {renderSortableHeader("Cliente", "customerName")}
+                  </TableHead>
+                  <TableHead className="font-medium">
+                    {renderSortableHeader("Produto", "productName")}
+                  </TableHead>
+                  <TableHead className="font-medium">
+                    {renderSortableHeader("Valor", "amount")}
                   </TableHead>
                   <TableHead className="font-medium">Status</TableHead>
-                  <TableHead className="font-medium">
-                    {renderSortableHeader("Total Gasto", "totalSpent")}
-                  </TableHead>
-                  <TableHead className="font-medium">
-                    {renderSortableHeader("Pedidos", "totalOrders")}
-                  </TableHead>
-                  <TableHead className="font-medium">
-                    {renderSortableHeader("Última Compra", "lastPurchase")}
-                  </TableHead>
-                  <TableHead className="font-medium">Ações</TableHead>
+                  <TableHead className="font-medium">Pagamento</TableHead>
+                  <TableHead className="font-medium">Afiliado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredClients.map((client) => (
+                {filteredSales.map((sale) => (
                   <TableRow
-                    key={client.id}
+                    key={sale.id}
                     className="hover:bg-muted/5 transition-colors"
                   >
                     <TableCell>
+                      <div className="text-sm">
+                        {format(new Date(sale.createdAt), "dd/MM/yyyy", {
+                          locale: ptBR,
+                        })}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(sale.createdAt), "HH:mm", {
+                          locale: ptBR,
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <div className="space-y-1">
-                        <div className="font-medium text-sm">{client.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {client.email}
+                        <div className="font-medium text-sm">
+                          {sale.customerName}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {formatDocument(client.document)}
+                          {sale.customerEmail}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <ClientStatusBadge status={client.clientStatus} />
-                      {client.hasAffiliateOrders && (
-                        <div className="text-xs text-blue-600 mt-1">
-                          Via Afiliado
+                      <div className="text-sm max-w-[200px] truncate">
+                        {sale.productName}
+                      </div>
+                      {sale.couponCode && (
+                        <div className="text-xs text-blue-600">
+                          Cupom: {sale.couponCode}
                         </div>
                       )}
                     </TableCell>
                     <TableCell>
                       <div className="font-medium text-sm">
-                        {formatCurrency(client.totalSpent)}
+                        {formatCurrency(sale.amount)}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Ticket: {formatCurrency(client.averageOrderValue)}
-                      </div>
+                      {sale.splitAmount && sale.splitAmount > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          Comissão:{" "}
+                          {formatCurrency(Math.round(sale.splitAmount))}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium text-sm">
-                        {client.totalOrders}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {client.paidOrdersCount}✓ {client.failedOrdersCount}✗{" "}
-                        {client.pendingOrdersCount}⏳
-                      </div>
+                      <SaleStatusBadge status={sale.status} />
                     </TableCell>
                     <TableCell>
-                      {client.lastPurchase ? (
-                        <div className="space-y-1">
-                          <div className="text-sm">
-                            {format(
-                              new Date(client.lastPurchase),
-                              "dd MMM yyyy",
-                              {
-                                locale: ptBR,
-                              }
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {client.daysSinceLastPurchase} dias atrás
-                          </div>
+                      <div className="text-sm">
+                        {formatPaymentMethod(sale.paymentMethod)}
+                      </div>
+                      {sale.installments > 1 && (
+                        <div className="text-xs text-muted-foreground">
+                          {sale.installments}x
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {sale.affiliateName ? (
+                        <div className="text-sm text-blue-600">
+                          {sale.affiliateName}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Nunca comprou
-                        </span>
+                        <div className="text-sm text-muted-foreground">
+                          Direto
+                        </div>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenClientDetails(client.id)}
-                        className="h-8 px-2"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -868,10 +827,10 @@ export function ClientsTable() {
           <div className="px-4 py-3 border-t border-gray-100 flex justify-between items-center text-sm">
             <div className="text-muted-foreground">
               Exibindo {pagination.startItem} - {pagination.endItem} de{" "}
-              {pagination.totalCount} clientes
-              {filteredClients.length !== clients.length && (
+              {pagination.totalCount} vendas
+              {filteredSales.length !== sales.length && (
                 <span className="text-blue-600 ml-1">
-                  ({filteredClients.length} filtrados)
+                  ({filteredSales.length} filtradas)
                 </span>
               )}
             </div>
@@ -903,13 +862,6 @@ export function ClientsTable() {
           </div>
         </Card>
       )}
-
-      {/* Modal de detalhes do cliente */}
-      <ClientDetailsModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        clientId={selectedClientId}
-      />
     </div>
   );
 }
