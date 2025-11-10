@@ -796,6 +796,11 @@ export function ClientsTable() {
                         <div className="text-xs text-muted-foreground">
                           {client.email}
                         </div>
+                        {client.phone && (
+                          <div className="text-xs text-muted-foreground">
+                            {client.phone}
+                          </div>
+                        )}
                         <div className="text-xs text-muted-foreground">
                           {formatDocument(client.document)}
                         </div>

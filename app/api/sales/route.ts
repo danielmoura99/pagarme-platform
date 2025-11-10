@@ -80,6 +80,7 @@ export async function GET(request: Request) {
       customerName: order.customer.name,
       customerEmail: order.customer.email,
       customerDocument: order.customer.document,
+      customerPhone: order.customer.phone,
       productName: order.items[0]?.product?.name || "Produto não encontrado",
       amount: order.amount,
       status: order.status,

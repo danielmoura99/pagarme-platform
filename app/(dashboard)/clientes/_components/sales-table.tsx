@@ -52,6 +52,7 @@ interface Sale {
   customerName: string;
   customerEmail: string;
   customerDocument: string;
+  customerPhone: string | null;
   productName: string;
   amount: number;
   status: string;
@@ -323,6 +324,7 @@ export function SalesTable() {
         "Data",
         "Cliente",
         "Email",
+        "Telefone",
         "Documento",
         "Produto",
         "Valor",
@@ -360,6 +362,7 @@ export function SalesTable() {
             ),
             escapeCSV(sale.customerName),
             escapeCSV(sale.customerEmail),
+            escapeCSV(sale.customerPhone || "Não informado"),
             escapeCSV(formatDocument(sale.customerDocument)),
             escapeCSV(sale.productName),
             formatCurrencyForCSV(sale.amount),
@@ -450,6 +453,7 @@ export function SalesTable() {
         cliente: {
           nome: sale.customerName,
           email: sale.customerEmail,
+          telefone: sale.customerPhone || "Não informado",
           documento: sale.customerDocument,
           documentoFormatado: formatDocument(sale.customerDocument),
         },
@@ -770,6 +774,11 @@ export function SalesTable() {
                         <div className="text-xs text-muted-foreground">
                           {sale.customerEmail}
                         </div>
+                        {sale.customerPhone && (
+                          <div className="text-xs text-muted-foreground">
+                            {sale.customerPhone}
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
