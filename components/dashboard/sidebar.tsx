@@ -16,6 +16,8 @@ import {
   Lock,
   ChartColumnIncreasingIcon,
   Plug,
+  UserCircle,
+  Link2,
 } from "lucide-react";
 //import { NavUser } from "@/components/nav-user";
 import {
@@ -30,7 +32,7 @@ import {
   SidebarGroupLabel,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -39,15 +41,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Dados do usuário - idealmente viriam da sessão
-const userData = {
-  name: "Admin",
-  email: "admin@exemplo.com",
-  avatar: "/avatar.jpg",
-};
-
-// Itens do menu principal
-const mainMenuItems = [
+// Itens do menu para ADMIN
+const adminMenuItems = [
   {
     title: "Dashboard",
     url: "/",
@@ -66,12 +61,6 @@ const mainMenuItems = [
     icon: ShoppingCart,
     disabled: false,
   },
-  //{
-  //  title: "Clientes",
-  //  url: "/clientes",
-  //  icon: Users,
-  //  disabled: false,
-  //},
   {
     title: "Cupons",
     url: "/coupons",
@@ -92,12 +81,40 @@ const mainMenuItems = [
   },
 ];
 
-// Itens do menu de afiliados/configurações
+// Itens do menu para AFILIADOS
 const affiliateMenuItems = [
+  {
+    title: "Minhas Vendas",
+    url: "/",
+    icon: Home,
+    disabled: false,
+  },
+  {
+    title: "Meus Links",
+    url: "/my-links",
+    icon: Link2,
+    disabled: false,
+  },
+  {
+    title: "Meu Perfil",
+    url: "/profile",
+    icon: UserCircle,
+    disabled: false,
+  },
+];
+
+// Itens do menu de afiliados/configurações (apenas para admin)
+const adminAffiliateMenuItems = [
   {
     title: "Afiliados",
     url: "/recipients",
     icon: HandCoins,
+    disabled: false,
+  },
+  {
+    title: "Meu Perfil",
+    url: "/profile",
+    icon: UserCircle,
     disabled: false,
   },
   {
@@ -116,6 +133,10 @@ const affiliateMenuItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  const isAdmin = session?.user?.role === "admin";
+  const isAffiliate = session?.user?.role === "affiliate";
 
   // Função para verificar se um item está ativo
   const isActive = (url: string) => {
@@ -127,8 +148,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     await signOut({ callbackUrl: "/login" });
   };
 
+  // Definir menus baseado na role
+  const mainMenuItems = isAdmin ? adminMenuItems : affiliateMenuItems;
+  const showAdminAffiliateMenu = isAdmin;
+
   // Renderiza um item de menu com ou sem tooltip de "Em desenvolvimento"
-  const renderMenuItem = (item: (typeof mainMenuItems)[0]) => {
+  const renderMenuItem = (item: (typeof adminMenuItems)[0]) => {
     // Classes base para o item de menu
     const baseClasses = `transition-colors ${
       isActive(item.url)
@@ -202,20 +227,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* Menu Principal */}
         <SidebarGroup>
           <SidebarGroupLabel className="px-4 text-xs uppercase text-gray-400 mb-1">
-            Menu Principal
+            {isAffiliate ? "Minhas Vendas" : "Menu Principal"}
           </SidebarGroupLabel>
           <SidebarMenu>{mainMenuItems.map(renderMenuItem)}</SidebarMenu>
         </SidebarGroup>
 
-        <SidebarSeparator className="my-4 bg-gray-700/50" />
-
-        {/* Menu de Afiliados/Configurações */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="px-4 text-xs uppercase text-gray-400 mb-1">
-            Afiliados & Configurações
-          </SidebarGroupLabel>
-          <SidebarMenu>{affiliateMenuItems.map(renderMenuItem)}</SidebarMenu>
-        </SidebarGroup>
+        {/* Menu de Afiliados/Configurações - Apenas para Admin */}
+        {showAdminAffiliateMenu && (
+          <>
+            <SidebarSeparator className="my-4 bg-gray-700/50" />
+            <SidebarGroup>
+              <SidebarGroupLabel className="px-4 text-xs uppercase text-gray-400 mb-1">
+                Afiliados & Configurações
+              </SidebarGroupLabel>
+              <SidebarMenu>{adminAffiliateMenuItems.map(renderMenuItem)}</SidebarMenu>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
 
       {/* Footer com informações do usuário e logout */}
@@ -224,14 +252,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <div className="flex items-center space-x-3">
             <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
               <span className="font-medium text-xs text-white">
-                {userData.name.charAt(0)}
+                {session?.user?.name?.charAt(0) || "U"}
               </span>
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-medium text-white">
-                {userData.name}
+                {session?.user?.name || "Usuário"}
               </span>
-              <span className="text-xs text-gray-400">{userData.email}</span>
+              <span className="text-xs text-gray-400">
+                {session?.user?.email || ""}
+              </span>
             </div>
           </div>
           <Button

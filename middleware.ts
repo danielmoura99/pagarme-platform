@@ -4,9 +4,34 @@ import { NextResponse } from "next/server";
 
 export default withAuth(
   async function middleware(req) {
+    const token = req.nextauth.token;
+    const pathname = req.nextUrl.pathname;
+
     // Se o usuário está autenticado e tenta acessar /login
-    if (req.nextUrl.pathname === "/login" && req.nextauth.token) {
-      return NextResponse.redirect(new URL("/products", req.url));
+    if (pathname === "/login" && token) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    // Rotas restritas apenas para admins
+    const adminOnlyPaths = [
+      "/products",
+      "/checkout-settings",
+      "/coupons",
+      "/analytics",
+      "/integrations",
+      "/recipients",
+      "/settings",
+      "/clientes",
+    ];
+
+    // Verificar se é uma rota de admin e o usuário não é admin
+    if (
+      token &&
+      token.role !== "admin" &&
+      adminOnlyPaths.some((path) => pathname.startsWith(path))
+    ) {
+      // Redirecionar afiliados para o dashboard
+      return NextResponse.redirect(new URL("/", req.url));
     }
 
     return NextResponse.next();

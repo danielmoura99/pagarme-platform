@@ -1,11 +1,21 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/transactions/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    // Verificar autenticação e obter sessão
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get("from")
       ? new Date(searchParams.get("from") as string)
@@ -30,8 +40,33 @@ export async function GET(request: Request) {
       },
     };
 
-    // Aplicar filtro de afiliado se especificado
-    if (affiliateFilter) {
+    // Se o usuário é afiliado, forçar filtro para ver apenas suas vendas
+    if (session.user.role === "affiliate") {
+      const affiliate = await prisma.affiliate.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true },
+      });
+
+      if (!affiliate) {
+        return NextResponse.json({
+          transactions: [],
+          pagination: {
+            currentPage: 1,
+            totalPages: 0,
+            totalCount: 0,
+            limit,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            startItem: 0,
+            endItem: 0,
+          },
+        });
+      }
+
+      // Afiliado só vê suas próprias vendas
+      whereClause.affiliateId = affiliate.id;
+    } else if (affiliateFilter) {
+      // Aplicar filtro de afiliado se especificado (apenas para admins)
       if (affiliateFilter === "with_affiliate") {
         whereClause.affiliateId = { not: null };
       } else if (affiliateFilter === "without_affiliate") {
@@ -90,11 +125,13 @@ export async function GET(request: Request) {
         date: order.createdAt.toISOString(),
         amount: order.amount,
         installments: order.installments,
-        affiliate: order.affiliate ? {
-          id: order.affiliate.id,
-          name: order.affiliate.user.name,
-          commission: order.affiliate.commission,
-        } : null,
+        affiliate: order.affiliate
+          ? {
+              id: order.affiliate.id,
+              name: order.affiliate.user.name,
+              commission: order.affiliate.commission,
+            }
+          : null,
         hasAffiliate: !!order.affiliate,
         // Informações adicionais para relatórios robustos
         pagarmeTransactionId: order.pagarmeTransactionId,
