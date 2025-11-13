@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSession } from "next-auth/react";
 import {
   Table,
   TableBody,
@@ -24,6 +25,8 @@ import {
   FileJson,
   ChevronLeft,
   ChevronRight,
+  X,
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -47,6 +50,12 @@ import {
   SelectTrigger,
   //SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TransactionDetailsModal } from "./transactions-details-modal";
 
 // Tipo para representar uma transação
@@ -172,6 +181,8 @@ function formatCurrency(amount: number) {
 
 export function TransactionsTable() {
   const { dateRange } = useDateRange();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
@@ -187,6 +198,8 @@ export function TransactionsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [productFilters, setProductFilters] = useState<string[]>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
   const [sortColumn, setSortColumn] = useState<string>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const tableRef = useRef<HTMLDivElement>(null);
@@ -196,6 +209,21 @@ export function TransactionsTable() {
   const [selectedTransactionId, setSelectedTransactionId] = useState<
     string | undefined
   >(undefined);
+
+  // Buscar lista de produtos para o filtro
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch("/api/products?active=true");
+        const data = await response.json();
+        setProducts(data);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      }
+    };
+
+    fetchProducts();
+  }, []);
 
   // Função para buscar transações com paginação
   const fetchTransactions = async (page = 1) => {
@@ -208,6 +236,13 @@ export function TransactionsTable() {
         page: page.toString(),
         limit: pagination.limit.toString(),
       });
+
+      // Adicionar filtros de produtos (múltiplos)
+      if (productFilters.length > 0) {
+        productFilters.forEach((productId) => {
+          queryParams.append("products[]", productId);
+        });
+      }
 
       const response = await fetch(
         `/api/transactions?${queryParams.toString()}`
@@ -254,7 +289,7 @@ export function TransactionsTable() {
   // Resetar página quando filtros mudarem
   useEffect(() => {
     fetchTransactions(1);
-  }, [dateRange]); // Dependência do contexto
+  }, [dateRange, productFilters]); // Dependência do contexto e filtros de produtos
 
   // Filtrar transações localmente (sem afetar paginação)
   const filteredTransactions = transactions
@@ -470,6 +505,19 @@ export function TransactionsTable() {
     link.click();
   };
 
+  // Gerenciar seleção múltipla de produtos
+  const toggleProductFilter = (productId: string) => {
+    setProductFilters((prev) =>
+      prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId]
+    );
+  };
+
+  const clearProductFilters = () => {
+    setProductFilters([]);
+  };
+
   // Alternar ordem de classificação
   const toggleSort = (column: string) => {
     if (sortColumn === column) {
@@ -554,6 +602,56 @@ export function TransactionsTable() {
               </SelectContent>
             </Select>
 
+            {/* Filtro de produtos (múltiplo) */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="h-9 w-[150px] justify-start bg-white">
+                  <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs truncate">
+                    {productFilters.length === 0
+                      ? "Produtos"
+                      : productFilters.length === 1
+                        ? products.find((p) => p.id === productFilters[0])?.name
+                        : `${productFilters.length} produtos`}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[250px] p-0" align="start">
+                <div className="p-3 border-b">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Filtrar por produto</h4>
+                    {productFilters.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={clearProductFilters}
+                      >
+                        Limpar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto p-2">
+                  {products.map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                      onClick={() => toggleProductFilter(product.id)}
+                    >
+                      <Checkbox
+                        checked={productFilters.includes(product.id)}
+                        onCheckedChange={() => toggleProductFilter(product.id)}
+                      />
+                      <label className="text-sm cursor-pointer flex-1">
+                        {product.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+
             {/* Busca */}
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -567,34 +665,36 @@ export function TransactionsTable() {
             </div>
           </div>
 
-          {/* Botão de exportação */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 bg-white">
-                <Download className="h-4 w-4 mr-2" />
-                Exportar
-                <ChevronDown className="h-4 w-4 ml-1 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuLabel>Formato</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={exportToCSV}
-                className="cursor-pointer"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={exportToJSON}
-                className="cursor-pointer"
-              >
-                <FileJson className="h-4 w-4 mr-2" />
-                JSON
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Botão de exportação - Apenas para Admin */}
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-9 bg-white">
+                  <Download className="h-4 w-4 mr-2" />
+                  Exportar
+                  <ChevronDown className="h-4 w-4 ml-1 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuLabel>Formato</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={exportToCSV}
+                  className="cursor-pointer"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={exportToJSON}
+                  className="cursor-pointer"
+                >
+                  <FileJson className="h-4 w-4 mr-2" />
+                  JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -652,7 +752,7 @@ export function TransactionsTable() {
               Nenhuma transação encontrada
             </p>
             <p className="text-xs">
-              {searchQuery || statusFilter !== "all" || paymentFilter !== "all"
+              {searchQuery || statusFilter !== "all" || paymentFilter !== "all" || productFilters.length > 0
                 ? "Tente ajustar seus critérios de filtro"
                 : "Não há transações no período selecionado"}
             </p>

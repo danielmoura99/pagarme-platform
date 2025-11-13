@@ -29,8 +29,9 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get("limit") || "50");
     const skip = (page - 1) * limit;
 
-    // Parâmetro de filtro por afiliado
+    // Parâmetros de filtro
     const affiliateFilter = searchParams.get("affiliate");
+    const productFilters = searchParams.getAll("products[]");
 
     // Where clause para filtros
     const whereClause: any = {
@@ -75,6 +76,17 @@ export async function GET(request: Request) {
         // Filtro por afiliado específico
         whereClause.affiliateId = affiliateFilter;
       }
+    }
+
+    // Aplicar filtro de produtos se especificado (múltiplos)
+    if (productFilters.length > 0) {
+      whereClause.items = {
+        some: {
+          productId: {
+            in: productFilters,
+          },
+        },
+      };
     }
 
     // Contar total de transações (para calcular total de páginas)
