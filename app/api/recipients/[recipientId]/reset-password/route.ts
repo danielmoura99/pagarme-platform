@@ -35,11 +35,12 @@ async function resetPassword(recipientId: string) {
   const defaultPassword = "Senha@123";
   const hashedPassword = await hash(defaultPassword, 10);
 
-  // Atualizar senha do usuário
+  // Atualizar senha do usuário e updatedAt (para invalidar sessões antigas)
   await prisma.user.update({
     where: { id: affiliate.userId },
     data: {
       password: hashedPassword,
+      updatedAt: new Date(), // Força atualização do timestamp
     },
   });
 

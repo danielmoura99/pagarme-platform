@@ -67,11 +67,12 @@ export async function POST(req: Request) {
     // Hash da nova senha
     const hashedPassword = await hash(newPassword, 10);
 
-    // Atualizar senha
+    // Atualizar senha e updatedAt (para invalidar sessões antigas)
     await prisma.user.update({
       where: { id: user.id },
       data: {
         password: hashedPassword,
+        updatedAt: new Date(), // Força atualização do timestamp
       },
     });
 
