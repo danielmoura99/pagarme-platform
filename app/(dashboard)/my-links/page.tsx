@@ -36,17 +36,17 @@ export default function MyLinksPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [copyingId, setCopyingId] = useState<string | null>(null);
-  const [affiliateId, setAffiliateId] = useState<string | null>(null);
+  const [recipientId, setRecipientId] = useState<string | null>(null);
 
-  // Buscar ID do afiliado do usuário logado
+  // Buscar recipientId do afiliado do usuário logado
   useEffect(() => {
-    const fetchAffiliateId = async () => {
+    const fetchAffiliateInfo = async () => {
       try {
         const response = await fetch("/api/user/affiliate");
         const data = await response.json();
 
-        if (data.affiliateId) {
-          setAffiliateId(data.affiliateId);
+        if (data.recipientId) {
+          setRecipientId(data.recipientId);
         }
       } catch (error) {
         console.error("Erro ao buscar afiliado:", error);
@@ -54,7 +54,7 @@ export default function MyLinksPage() {
     };
 
     if (session?.user?.role === "affiliate") {
-      fetchAffiliateId();
+      fetchAffiliateInfo();
     }
   }, [session]);
 
@@ -83,11 +83,11 @@ export default function MyLinksPage() {
 
   // Gerar link de afiliado
   const generateLink = (productId: string) => {
-    if (!affiliateId) return "";
+    if (!recipientId) return "";
 
     if (typeof window !== "undefined") {
       const baseUrl = window.location.origin;
-      return `${baseUrl}/checkout?productId=${productId}&ref=${affiliateId}`;
+      return `${baseUrl}/checkout?productId=${productId}&ref=${recipientId}`;
     }
     return "";
   };
@@ -156,7 +156,7 @@ export default function MyLinksPage() {
       </div>
 
       <div className="px-6 space-y-4">
-        {!affiliateId && (
+        {!recipientId && (
           <Card className="bg-yellow-50 border-yellow-200">
             <CardContent className="pt-6">
               <p className="text-sm text-yellow-800">
@@ -216,7 +216,7 @@ export default function MyLinksPage() {
                       <Button
                         size="sm"
                         onClick={() => copyLink(product.id)}
-                        disabled={copyingId === product.id || !affiliateId}
+                        disabled={copyingId === product.id || !recipientId}
                         className="shrink-0"
                       >
                         {copyingId === product.id ? (
