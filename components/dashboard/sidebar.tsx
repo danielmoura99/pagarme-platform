@@ -18,6 +18,7 @@ import {
   Plug,
   UserCircle,
   Link2,
+  Monitor,
 } from "lucide-react";
 //import { NavUser } from "@/components/nav-user";
 import {
@@ -109,6 +110,12 @@ const adminAffiliateMenuItems = [
     title: "Afiliados",
     url: "/recipients",
     icon: HandCoins,
+    disabled: false,
+  },
+  {
+    title: "Sessões Ativas",
+    url: "/admin-sessions",
+    icon: Monitor,
     disabled: false,
   },
   {

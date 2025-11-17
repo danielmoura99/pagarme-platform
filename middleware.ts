@@ -22,6 +22,7 @@ export default withAuth(
       "/recipients",
       "/settings",
       "/clientes",
+      "/admin-sessions",
     ];
 
     // Verificar se é uma rota de admin e o usuário não é admin
