@@ -19,6 +19,23 @@ model User {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   affiliate Affiliate?
+  sessions  UserSession[]
+}
+
+model UserSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken  String   @unique
+  ipAddress     String?
+  userAgent     String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  lastActiveAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([sessionToken])
+  @@index([expiresAt])
 }
 
 model Customer {

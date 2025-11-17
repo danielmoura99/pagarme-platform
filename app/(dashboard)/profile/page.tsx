@@ -1,7 +1,7 @@
 // app/(dashboard)/profile/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Heading } from "@/components/ui/heading";
 import { Separator } from "@/components/ui/separator";
@@ -10,7 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Mail, KeyRound } from "lucide-react";
+import { Loader2, User, Mail, KeyRound, Monitor, LogOut, Clock } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+interface Session {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastActiveAt: string;
+  expiresAt: string;
+}
 
 export default function ProfilePage() {
   const { data: session } = useSession();
@@ -21,6 +32,74 @@ export default function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+
+  // Carregar sessões ativas
+  const loadSessions = async () => {
+    try {
+      setLoadingSessions(true);
+      const response = await fetch("/api/user/sessions");
+      const data = await response.json();
+
+      if (response.ok) {
+        setSessions(data.sessions);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar sessões:", error);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  const handleLogoutAll = async () => {
+    try {
+      setLogoutAllLoading(true);
+
+      const response = await fetch("/api/user/logout-all", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao deslogar");
+      }
+
+      toast({
+        title: "Sucesso!",
+        description: data.message,
+      });
+
+      // Recarregar a página para forçar logout
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1000);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Erro ao deslogar",
+      });
+    } finally {
+      setLogoutAllLoading(false);
+    }
+  };
+
+  const getBrowserName = (userAgent: string | null) => {
+    if (!userAgent) return "Desconhecido";
+
+    if (userAgent.includes("Chrome")) return "Chrome";
+    if (userAgent.includes("Firefox")) return "Firefox";
+    if (userAgent.includes("Safari")) return "Safari";
+    if (userAgent.includes("Edge")) return "Edge";
+    return "Outro";
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,6 +288,88 @@ export default function ProfilePage() {
                   </Button>
                 </div>
               </form>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card de Sessões Ativas */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Monitor className="h-5 w-5" />
+                  Sessões Ativas
+                </CardTitle>
+                <CardDescription>
+                  Dispositivos conectados à sua conta
+                </CardDescription>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleLogoutAll}
+                disabled={logoutAllLoading || sessions.length === 0}
+              >
+                {logoutAllLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deslogando...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Deslogar Todos
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingSessions ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Nenhuma sessão ativa encontrada
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sessions.map((sess) => (
+                  <div
+                    key={sess.id}
+                    className="p-4 border rounded-lg space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Monitor className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">
+                          {getBrowserName(sess.userAgent)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        IP: {sess.ipAddress || "Desconhecido"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Criado: {format(new Date(sess.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Última atividade: {format(new Date(sess.lastActiveAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </div>
+                    </div>
+                    {sess.userAgent && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {sess.userAgent}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
