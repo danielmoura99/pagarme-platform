@@ -79,8 +79,8 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
 
-        // VALIDAÇÃO 1: Verificar se o login tem mais de 2 minutos (2 * 60 * 1000 = 120000ms)
-        const SESSION_MAX_AGE = 2 * 60 * 1000; // 2 minutos
+        // VALIDAÇÃO 1: Verificar se o login tem mais de 24 horas (24 * 60 * 60 * 1000 = 86400000ms)
+        const SESSION_MAX_AGE = 24 * 60 * 60 * 1000; // 24 horas
         if (token.loginTime && (Date.now() - (token.loginTime as number)) > SESSION_MAX_AGE) {
           // Deletar sessão do banco se existir
           if (token.sessionToken) {
