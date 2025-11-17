@@ -70,6 +70,7 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role;
         token.passwordUpdatedAt = user.updatedAt?.getTime();
         token.sessionToken = (user as any).sessionToken;
+        token.loginTime = Date.now(); // Timestamp do login
       }
       return token;
     },
@@ -78,7 +79,19 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
 
-        // Validar se a sessão existe no banco de dados
+        // VALIDAÇÃO 1: Verificar se o login tem mais de 2 minutos (2 * 60 * 1000 = 120000ms)
+        const SESSION_MAX_AGE = 2 * 60 * 1000; // 2 minutos
+        if (token.loginTime && (Date.now() - (token.loginTime as number)) > SESSION_MAX_AGE) {
+          // Deletar sessão do banco se existir
+          if (token.sessionToken) {
+            await prisma.userSession.deleteMany({
+              where: { sessionToken: token.sessionToken as string },
+            });
+          }
+          throw new Error("Session expired - please login again");
+        }
+
+        // VALIDAÇÃO 2: Validar se a sessão existe no banco de dados
         if (token.sessionToken) {
           const dbSession = await prisma.userSession.findUnique({
             where: { sessionToken: token.sessionToken as string },
@@ -102,9 +115,12 @@ export const authOptions: NextAuthOptions = {
             where: { id: dbSession.id },
             data: { lastActiveAt: new Date() },
           });
+        } else {
+          // VALIDAÇÃO 3: Se não tem sessionToken no banco, é uma sessão antiga - INVALIDA
+          throw new Error("Session invalid - please login again");
         }
 
-        // Validar se a senha foi alterada após o login
+        // VALIDAÇÃO 4: Validar se a senha foi alterada após o login
         if (token.passwordUpdatedAt) {
           const user = await prisma.user.findUnique({
             where: { id: token.id as string },
