@@ -9,7 +9,19 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -127,6 +139,8 @@ export function TransactionDetailsModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [showRefundConfirm, setShowRefundConfirm] = useState(false);
   const { toast } = useToast();
 
   // Buscar detalhes da transação quando o modal for aberto
@@ -192,6 +206,48 @@ export function TransactionDetailsModal({
       description: "ID copiado para a área de transferência",
     });
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Processar reembolso
+  const handleRefund = async () => {
+    if (!transactionId) return;
+
+    setRefunding(true);
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}/refund`, {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao processar reembolso");
+      }
+
+      toast({
+        title: "Reembolso processado",
+        description: "A transação foi reembolsada com sucesso.",
+      });
+
+      // Atualizar o status local da transação
+      if (transaction) {
+        setTransaction({
+          ...transaction,
+          status: "refunded",
+        });
+      }
+
+      setShowRefundConfirm(false);
+    } catch (err) {
+      console.error("Erro ao processar reembolso:", err);
+      toast({
+        title: "Erro ao processar reembolso",
+        description: err instanceof Error ? err.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setRefunding(false);
+    }
   };
 
   // Status badge com cores apropriadas
@@ -654,7 +710,13 @@ export function TransactionDetailsModal({
         <div className="flex justify-between items-center">
           <div className="space-x-2">
             {transaction.status === "paid" && (
-              <Button variant="outline" size="sm" className="text-red-600">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:bg-red-50"
+                onClick={() => setShowRefundConfirm(true)}
+                disabled={refunding}
+              >
                 <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
                 Reembolsar
               </Button>
@@ -681,6 +743,29 @@ export function TransactionDetailsModal({
             </Button>
           </div>
         </div>
+
+        {/* Dialog de confirmação de reembolso */}
+        <AlertDialog open={showRefundConfirm} onOpenChange={setShowRefundConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar Reembolso</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza que deseja reembolsar esta transação? Esta ação irá
+                alterar o status da transação para &quot;Reembolsado&quot;.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={refunding}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRefund}
+                disabled={refunding}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {refunding ? "Processando..." : "Confirmar Reembolso"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </>
     );
   };
