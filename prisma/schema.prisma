@@ -161,6 +161,9 @@ model Order {
   lastAttemptAt     DateTime? // Timestamp da última tentativa
 
   @@index([checkoutId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderBump {

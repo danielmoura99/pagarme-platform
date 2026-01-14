@@ -19,6 +19,7 @@ import {
   UserCircle,
   Link2,
   Monitor,
+  BarChart3,
 } from "lucide-react";
 //import { NavUser } from "@/components/nav-user";
 import {
@@ -48,6 +49,12 @@ const adminMenuItems = [
     title: "Dashboard",
     url: "/",
     icon: Home,
+    disabled: false,
+  },
+  {
+    title: "Vendas",
+    url: "/dash",
+    icon: BarChart3,
     disabled: false,
   },
   {
