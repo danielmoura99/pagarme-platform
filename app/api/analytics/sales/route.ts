@@ -43,6 +43,18 @@ export async function GET(request: Request) {
         id: true,
         amount: true,
         createdAt: true,
+        affiliateId: true,
+        affiliate: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
         items: {
           select: {
             quantity: true,
@@ -159,6 +171,92 @@ export async function GET(request: Request) {
       ? ((lastMonthRevenue - twoMonthsAgoRevenue) / twoMonthsAgoRevenue) * 100
       : 0;
 
+    // Análise de vendas com/sem afiliação por mês
+    const affiliateSalesByMonth: { [key: string]: { withAffiliate: { count: number; revenue: number }, withoutAffiliate: { count: number; revenue: number } } } = {};
+
+    // Inicializar todos os meses
+    for (let i = 0; i < months; i++) {
+      const date = subMonths(currentDate, months - 1 - i);
+      const monthKey = format(date, "MMM/yy");
+      affiliateSalesByMonth[monthKey] = {
+        withAffiliate: { count: 0, revenue: 0 },
+        withoutAffiliate: { count: 0, revenue: 0 },
+      };
+    }
+
+    // Agrupar por mês e tipo
+    orders.forEach((order) => {
+      const monthKey = format(order.createdAt, "MMM/yy");
+      if (affiliateSalesByMonth[monthKey]) {
+        if (order.affiliateId !== null) {
+          affiliateSalesByMonth[monthKey].withAffiliate.count += 1;
+          affiliateSalesByMonth[monthKey].withAffiliate.revenue += order.amount;
+        } else {
+          affiliateSalesByMonth[monthKey].withoutAffiliate.count += 1;
+          affiliateSalesByMonth[monthKey].withoutAffiliate.revenue += order.amount;
+        }
+      }
+    });
+
+    // Converter para array
+    const affiliateStatsArray = Object.entries(affiliateSalesByMonth).map(([month, data]) => ({
+      month,
+      withAffiliate: data.withAffiliate.count,
+      withAffiliateRevenue: data.withAffiliate.revenue / 100,
+      withoutAffiliate: data.withoutAffiliate.count,
+      withoutAffiliateRevenue: data.withoutAffiliate.revenue / 100,
+    }));
+
+    // Totais gerais
+    const withAffiliate = orders.filter(order => order.affiliateId !== null);
+    const withoutAffiliate = orders.filter(order => order.affiliateId === null);
+
+    const affiliateStats = {
+      withAffiliate: {
+        count: withAffiliate.length,
+        revenue: withAffiliate.reduce((sum, order) => sum + order.amount, 0) / 100,
+      },
+      withoutAffiliate: {
+        count: withoutAffiliate.length,
+        revenue: withoutAffiliate.reduce((sum, order) => sum + order.amount, 0) / 100,
+      },
+      byMonth: affiliateStatsArray,
+    };
+
+    // Top afiliados por faturamento
+    const affiliateSales: { [key: string]: { name: string; email: string; revenue: number; count: number } } = {};
+
+    withAffiliate.forEach((order) => {
+      if (order.affiliate) {
+        const affiliateId = order.affiliate.id;
+        const affiliateName = order.affiliate.user.name || order.affiliate.user.email;
+        const affiliateEmail = order.affiliate.user.email;
+
+        if (!affiliateSales[affiliateId]) {
+          affiliateSales[affiliateId] = {
+            name: affiliateName,
+            email: affiliateEmail,
+            revenue: 0,
+            count: 0,
+          };
+        }
+
+        affiliateSales[affiliateId].revenue += order.amount;
+        affiliateSales[affiliateId].count += 1;
+      }
+    });
+
+    const topAffiliates = Object.entries(affiliateSales)
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        email: data.email,
+        revenue: data.revenue / 100,
+        salesCount: data.count,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10); // Top 10 afiliados
+
     const responseData = {
       metrics: {
         totalSales,
@@ -169,6 +267,8 @@ export async function GET(request: Request) {
       },
       salesByMonth: salesByMonthArray,
       productsSold: productsSoldArray,
+      affiliateStats,
+      topAffiliates,
     };
 
     // Atualizar cache

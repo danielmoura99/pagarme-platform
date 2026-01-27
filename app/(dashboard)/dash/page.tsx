@@ -10,6 +10,8 @@ import { SalesMetrics } from "./_components/sales-metrics";
 import { SalesByMonthChart } from "./_components/sales-by-month-chart";
 import { ProductsSoldChart } from "./_components/products-sold-chart";
 import { RevenueChart } from "./_components/revenue-chart";
+import { AffiliateComparisonChart } from "./_components/affiliate-comparison-chart";
+import { TopAffiliatesChart } from "./_components/top-affiliates-chart";
 
 // Loading skeletons
 function MetricsSkeleton() {
@@ -73,8 +75,23 @@ export default function DashPage() {
 
       {/* Receita ao Longo do Tempo */}
       <Suspense fallback={<ChartSkeleton />}>
-        <RevenueChart />
+        <div className="mb-6">
+          <RevenueChart />
+        </div>
       </Suspense>
+
+      {/* Análise de Afiliados */}
+      <div className="grid gap-6 md:grid-cols-2 mb-6">
+        {/* Comparação Com vs Sem Afiliação */}
+        <Suspense fallback={<ChartSkeleton />}>
+          <AffiliateComparisonChart />
+        </Suspense>
+
+        {/* Top Afiliados */}
+        <Suspense fallback={<ChartSkeleton />}>
+          <TopAffiliatesChart />
+        </Suspense>
+      </div>
     </div>
   );
 }
