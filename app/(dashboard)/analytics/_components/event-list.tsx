@@ -5,7 +5,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -42,27 +41,33 @@ interface EventsData {
   totalPages: number;
 }
 
-export function EventsList({ fromDate }: { fromDate?: string }) {
+type StatusFilter = "all" | "checkout" | "purchase";
+
+export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: string }) {
   const [events, setEvents] = useState<LeadEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [fromDate]);
+  }, [fromDate, toDate, statusFilter]);
 
   useEffect(() => {
     fetchEvents(currentPage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, fromDate]);
+  }, [currentPage, fromDate, toDate, statusFilter]);
 
   const fetchEvents = async (page: number) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+      if (statusFilter === "checkout") params.set("eventType", "InitiateCheckout");
+      if (statusFilter === "purchase") params.set("eventType", "Purchase");
       const response = await fetch(`/api/analytics/pixels?${params}`);
       const result: EventsData = await response.json();
       setEvents(result.leadEvents || []);
@@ -229,10 +234,38 @@ export function EventsList({ fromDate }: { fromDate?: string }) {
     </div>
   );
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
+  const filterButtons: { label: string; value: StatusFilter }[] = [
+    { label: "Todos", value: "all" },
+    { label: "Checkouts", value: "checkout" },
+    { label: "Compras", value: "purchase" },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Leads e Conversões</CardTitle>
+        <div className="text-sm text-muted-foreground">
+          {totalCount > 0 && `${totalCount} total`}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {/* Filtro de status */}
+        <div className="flex items-center gap-2 mb-4">
+          {filterButtons.map((btn) => (
+            <Button
+              key={btn.value}
+              size="sm"
+              variant={statusFilter === btn.value ? "default" : "outline"}
+              onClick={() => setStatusFilter(btn.value)}
+            >
+              {btn.label}
+            </Button>
+          ))}
+        </div>
+
+        <Separator className="mb-4" />
+
+        {loading ? (
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
               <div
@@ -247,122 +280,98 @@ export function EventsList({ fromDate }: { fromDate?: string }) {
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (events.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Leads e Conversões</CardTitle>
-        </CardHeader>
-        <CardContent>
+        ) : events.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground">
-              Nenhum lead ou conversão registrado ainda.
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              Os dados de leads aparecerão aqui quando houver eventos com conversões.
+              Nenhum lead ou conversão registrado no período.
             </p>
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Leads e Conversões</CardTitle>
-        <div className="text-sm text-muted-foreground">
-          {totalCount > 0 && `${totalCount} total`}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* Lista resumida */}
-        <div className="space-y-2">
-          {events.map((event) => (
-            <Dialog key={event.id}>
-              <DialogTrigger asChild>
-                <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
-                  <div className="flex items-center gap-3 flex-1">
-                    <Badge
-                      className={getEventColor(event.eventType)}
-                      variant="secondary"
-                    >
-                      {event.eventType}
-                    </Badge>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{event.productName}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{event.platform}</span>
-                        <span>•</span>
-                        <span>{new Date(event.timestamp).toLocaleDateString("pt-BR")}</span>
-                        {event.customerName && (
-                          <>
+        ) : (
+          <>
+            {/* Lista resumida */}
+            <div className="space-y-2">
+              {events.map((event) => (
+                <Dialog key={event.id}>
+                  <DialogTrigger asChild>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group">
+                      <div className="flex items-center gap-3 flex-1">
+                        <Badge
+                          className={getEventColor(event.eventType)}
+                          variant="secondary"
+                        >
+                          {event.eventType}
+                        </Badge>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{event.productName}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{event.platform}</span>
                             <span>•</span>
-                            <span className="truncate">{event.customerName}</span>
-                          </>
+                            <span>{new Date(event.timestamp).toLocaleDateString("pt-BR")}</span>
+                            {event.customerName && (
+                              <>
+                                <span>•</span>
+                                <span className="truncate">{event.customerName}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {event.value && (
+                          <span className="text-sm font-semibold text-green-600">
+                            {formatEventData(event.eventType, event.data, event.value)}
+                          </span>
                         )}
+                        <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {event.value && (
-                      <span className="text-sm font-semibold text-green-600">
-                        {formatEventData(event.eventType, event.data, event.value)}
-                      </span>
-                    )}
-                    <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Badge className={getEventColor(event.eventType)} variant="secondary">
-                      {event.eventType}
-                    </Badge>
-                    {event.productName}
-                  </DialogTitle>
-                </DialogHeader>
-                <LeadDetails event={event} />
-              </DialogContent>
-            </Dialog>
-          ))}
-        </div>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Badge className={getEventColor(event.eventType)} variant="secondary">
+                          {event.eventType}
+                        </Badge>
+                        {event.productName}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <LeadDetails event={event} />
+                  </DialogContent>
+                </Dialog>
+              ))}
+            </div>
 
-        {/* Paginação */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-6 pt-4 border-t">
-            <div className="text-sm text-muted-foreground">
-              Página {currentPage} de {totalPages}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                Próxima
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Página {currentPage} de {totalPages}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

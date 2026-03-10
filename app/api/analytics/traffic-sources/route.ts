@@ -10,10 +10,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") || "30");
     const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
 
     const fromDate = fromParam
       ? new Date(fromParam + "T00:00:00")
       : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
+    const toDate = toParam ? new Date(toParam + "T23:59:59") : new Date();
 
     // Visitantes por fonte (PixelEventLog — inclui quem não comprou)
     const visitorsBySource = await prisma.$queryRaw`
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
         COUNT(*) as total_events
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
         AND "sessionId" IS NOT NULL
       GROUP BY source, medium, campaign
       ORDER BY visitors DESC
@@ -41,6 +44,7 @@ export async function GET(request: Request) {
       FROM "Order"
       WHERE status = 'paid'
         AND "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
       GROUP BY "utmSource", "utmMedium", "utmCampaign"
     `;
 
@@ -98,41 +102,51 @@ export async function GET(request: Request) {
       }
     });
 
-    // Top campanhas: compras + receita (Order) + InitiateCheckout (PixelEventLog)
+    // Campanhas: UNION entre Order (compras) e PixelEventLog (acessos)
+    // Inclui campanhas com trafego mesmo sem conversao
     const topCampaigns = await prisma.$queryRaw`
       SELECT
-        o.campaign,
-        o.source,
-        o.medium,
-        o.conversions,
-        o.revenue_cents,
-        COALESCE(ic.initiate_checkout, 0) as initiate_checkout
+        campaign,
+        source,
+        medium,
+        SUM(conversions)       as conversions,
+        SUM(revenue_cents)     as revenue_cents,
+        SUM(initiate_checkout) as initiate_checkout
       FROM (
         SELECT
-          "utmCampaign" as campaign,
-          "utmSource" as source,
-          "utmMedium" as medium,
-          COUNT(*) as conversions,
-          SUM(amount) as revenue_cents
+          "utmCampaign"  as campaign,
+          "utmSource"    as source,
+          "utmMedium"    as medium,
+          COUNT(*)       as conversions,
+          SUM(amount)    as revenue_cents,
+          0              as initiate_checkout
         FROM "Order"
         WHERE status = 'paid'
           AND "createdAt" >= ${fromDate}
+          AND "createdAt" <= ${toDate}
           AND "utmCampaign" IS NOT NULL
           AND "utmCampaign" != ''
         GROUP BY "utmCampaign", "utmSource", "utmMedium"
-      ) o
-      LEFT JOIN (
+
+        UNION ALL
+
         SELECT
           campaign,
-          COUNT(*) as initiate_checkout
+          COALESCE(source, 'direct') as source,
+          COALESCE(medium, 'none')   as medium,
+          0                          as conversions,
+          0                          as revenue_cents,
+          COUNT(*)                   as initiate_checkout
         FROM "PixelEventLog"
         WHERE "eventType" = 'InitiateCheckout'
           AND "createdAt" >= ${fromDate}
+          AND "createdAt" <= ${toDate}
           AND campaign IS NOT NULL
           AND campaign != ''
-        GROUP BY campaign
-      ) ic ON ic.campaign = o.campaign
-      ORDER BY o.conversions DESC, o.revenue_cents DESC
+        GROUP BY campaign, source, medium
+      ) combined
+      GROUP BY campaign, source, medium
+      ORDER BY conversions DESC, initiate_checkout DESC
       LIMIT 20
     `;
 
@@ -155,6 +169,7 @@ export async function GET(request: Request) {
         ) as revenue
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
         AND "landingPage" IS NOT NULL
         AND "sessionId" IS NOT NULL
       GROUP BY "landingPage"

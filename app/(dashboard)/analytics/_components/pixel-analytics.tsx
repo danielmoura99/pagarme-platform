@@ -26,7 +26,7 @@ interface AnalyticsData {
   };
 }
 
-export function PixelAnalytics({ fromDate }: { fromDate?: string }) {
+export function PixelAnalytics({ fromDate, toDate }: { fromDate?: string; toDate?: string }) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function PixelAnalytics({ fromDate }: { fromDate?: string }) {
   useEffect(() => {
     fetchAnalytics();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate]);
+  }, [fromDate, toDate]);
 
   const fetchAnalytics = async () => {
     try {
@@ -42,6 +42,7 @@ export function PixelAnalytics({ fromDate }: { fromDate?: string }) {
       setError(null);
       const params = new URLSearchParams();
       if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
       const response = await fetch(`/api/analytics/pixels?${params}`);
       const result = await response.json();
 

@@ -12,16 +12,20 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
     const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
+    const eventTypeParam = searchParams.get("eventType");
 
     const fromDate = fromParam
       ? new Date(fromParam + "T00:00:00")
       : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
+    const toDate = toParam ? new Date(toParam + "T23:59:59") : new Date();
 
     // Total de eventos de rastreamento (PixelEventLog — inclui todos os eventos do funil)
     const eventStats = await prisma.$queryRaw`
       SELECT COUNT(*) as total_events
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
     `;
     const stats = Array.isArray(eventStats) ? eventStats[0] : eventStats;
     const totalEvents = Number(stats?.total_events || 0);
@@ -34,6 +38,7 @@ export async function GET(request: Request) {
       FROM "Order"
       WHERE status = 'paid'
         AND "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
     `;
     const oStats = Array.isArray(orderStats) ? orderStats[0] : orderStats;
     const totalConversions = Number(oStats?.total_conversions || 0);
@@ -45,7 +50,7 @@ export async function GET(request: Request) {
     const eventsByType = await prisma.pixelEventLog.groupBy({
       by: ["eventType"],
       _count: { id: true },
-      where: { createdAt: { gte: fromDate } },
+      where: { createdAt: { gte: fromDate, lte: toDate } },
       orderBy: { _count: { id: "desc" } },
     });
 
@@ -57,6 +62,7 @@ export async function GET(request: Request) {
         COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as conversions
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
       GROUP BY DATE("createdAt")
       ORDER BY date DESC
       LIMIT ${days}
@@ -69,14 +75,21 @@ export async function GET(request: Request) {
       where: { enabled: true },
     });
 
+    // Filtro de evento para paginação
+    const eventFilter = eventTypeParam
+      ? { eventType: eventTypeParam }
+      : {
+          OR: [
+            { orderId: { not: null } },
+            { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } },
+          ],
+        };
+
     // Paginação dos lead events
     const totalCount = await prisma.pixelEventLog.count({
       where: {
-        createdAt: { gte: fromDate },
-        OR: [
-          { orderId: { not: null } },
-          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } },
-        ],
+        createdAt: { gte: fromDate, lte: toDate },
+        ...eventFilter,
       },
     });
 
@@ -88,11 +101,8 @@ export async function GET(request: Request) {
       skip,
       orderBy: { createdAt: "desc" },
       where: {
-        createdAt: { gte: fromDate },
-        OR: [
-          { orderId: { not: null } },
-          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } },
-        ],
+        createdAt: { gte: fromDate, lte: toDate },
+        ...eventFilter,
       },
       include: {
         pixelConfig: {
@@ -126,6 +136,7 @@ export async function GET(request: Request) {
       JOIN "Product" p ON p.id = oi."productId"
       WHERE o.status = 'paid'
         AND o."createdAt" >= ${fromDate}
+        AND o."createdAt" <= ${toDate}
       GROUP BY p.id, p.name
       ORDER BY revenue_cents DESC
       LIMIT 5

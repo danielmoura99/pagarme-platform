@@ -27,20 +27,21 @@ interface TrafficData {
   majorSources: MajorSource[];
 }
 
-export function TrafficSources({ fromDate }: { fromDate?: string }) {
+export function TrafficSources({ fromDate, toDate }: { fromDate?: string; toDate?: string }) {
   const [data, setData] = useState<TrafficData>({ campaigns: [], majorSources: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromDate]);
+  }, [fromDate, toDate]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
       if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
       const response = await fetch(`/api/analytics/traffic-sources?${params}`);
       const result = await response.json();
 
@@ -123,6 +124,55 @@ export function TrafficSources({ fromDate }: { fromDate?: string }) {
   return (
     <div className="space-y-6">
 
+      {/* Tabela de campanhas */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Performance por Campanha</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.campaigns.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nenhuma campanha com UTM registrada no período.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase">
+                    <th className="text-left pb-2 font-medium">Campanha</th>
+                    <th className="text-right pb-2 font-medium">Checkouts</th>
+                    <th className="text-right pb-2 font-medium">Compras</th>
+                    <th className="text-right pb-2 font-medium">Conversão</th>
+                    <th className="text-right pb-2 font-medium">Receita</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.campaigns.map((row, i) => (
+                    <tr key={i} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 pr-4">
+                        <div className="font-medium truncate max-w-[220px]" title={row.campaign}>
+                          {row.campaign}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                          <Badge variant="outline" className="text-xs">{row.source}</Badge>
+                          <Badge variant="secondary" className="text-xs">{row.medium}</Badge>
+                        </div>
+                      </td>
+                      <td className="py-3 text-right">{row.initiateCheckout.toLocaleString("pt-BR")}</td>
+                      <td className="py-3 text-right font-medium">{row.purchases.toLocaleString("pt-BR")}</td>
+                      <td className="py-3 text-right">
+                        <span className={row.conversionRate >= 1 ? "text-green-700 font-medium" : "text-muted-foreground"}>
+                          {row.conversionRate.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="py-3 text-right font-medium text-green-700">{formatCurrency(row.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Fontes de tráfego major */}
       <Card>
         <CardHeader>
@@ -152,56 +202,6 @@ export function TrafficSources({ fromDate }: { fromDate?: string }) {
                       </td>
                       <td className="py-3 text-right font-medium">{row.visitors.toLocaleString("pt-BR")}</td>
                       <td className="py-3 text-right font-medium">{row.purchases.toLocaleString("pt-BR")}</td>
-                      <td className="py-3 text-right font-medium text-green-700">{formatCurrency(row.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tabela de campanhas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance por Campanha</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.campaigns.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">Nenhuma campanha com UTM registrada no período.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground text-xs uppercase">
-                    <th className="text-left pb-2 font-medium">Campanha</th>
-                    <th className="text-left pb-2 font-medium">Fonte</th>
-                    <th className="text-right pb-2 font-medium">Checkouts</th>
-                    <th className="text-right pb-2 font-medium">Compras</th>
-                    <th className="text-right pb-2 font-medium">Conversão</th>
-                    <th className="text-right pb-2 font-medium">Receita</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {data.campaigns.map((row, i) => (
-                    <tr key={i} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 pr-4 font-medium max-w-[200px] truncate" title={row.campaign}>
-                        {row.campaign}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-1">
-                          <Badge variant="outline" className="text-xs">{row.source}</Badge>
-                          <Badge variant="secondary" className="text-xs">{row.medium}</Badge>
-                        </div>
-                      </td>
-                      <td className="py-3 text-right">{row.initiateCheckout.toLocaleString("pt-BR")}</td>
-                      <td className="py-3 text-right font-medium">{row.purchases.toLocaleString("pt-BR")}</td>
-                      <td className="py-3 text-right">
-                        <span className={row.conversionRate >= 1 ? "text-green-700 font-medium" : "text-muted-foreground"}>
-                          {row.conversionRate.toFixed(1)}%
-                        </span>
-                      </td>
                       <td className="py-3 text-right font-medium text-green-700">{formatCurrency(row.revenue)}</td>
                     </tr>
                   ))}

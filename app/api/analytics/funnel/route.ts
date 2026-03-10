@@ -10,10 +10,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") || "30");
     const fromParam = searchParams.get("from");
+    const toParam = searchParams.get("to");
 
     const fromDate = fromParam
       ? new Date(fromParam + "T00:00:00")
       : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
+    const toDate = toParam ? new Date(toParam + "T23:59:59") : new Date();
 
     // Eventos do funil (topo e meio): PageView, ViewContent, InitiateCheckout, AddPaymentInfo
     const funnelData = await prisma.$queryRaw`
@@ -22,6 +24,7 @@ export async function GET(request: Request) {
         COUNT(*) as count
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
       GROUP BY "eventType"
     `;
 
@@ -34,7 +37,7 @@ export async function GET(request: Request) {
     const paidOrderCount = await prisma.order.count({
       where: {
         status: "paid",
-        createdAt: { gte: fromDate },
+        createdAt: { gte: fromDate, lte: toDate },
       },
     });
 
@@ -45,6 +48,7 @@ export async function GET(request: Request) {
         COUNT(DISTINCT "sessionId") as unique_sessions
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
+        AND "createdAt" <= ${toDate}
         AND "sessionId" IS NOT NULL
       GROUP BY "eventType"
     `;

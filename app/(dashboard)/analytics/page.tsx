@@ -45,10 +45,20 @@ function ChartSkeleton() {
   );
 }
 
+function getMonthStart() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+function getToday() {
+  return new Date().toISOString().split("T")[0];
+}
+
 export default function PixelAnalyticsPage() {
   const { isAuthenticated, isLoading, showModal, authenticate, onSuccess, onClose } = useAdminAuth();
-  const [fromDate, setFromDate] = useState<string>("");
-  const [inputDate, setInputDate] = useState<string>("");
+  const [fromDate, setFromDate] = useState<string>(getMonthStart());
+  const [toDate, setToDate] = useState<string>(getToday());
+  const [inputFrom, setInputFrom] = useState<string>(getMonthStart());
+  const [inputTo, setInputTo] = useState<string>(getToday());
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -56,8 +66,12 @@ export default function PixelAnalyticsPage() {
     }
   }, [isLoading, isAuthenticated, authenticate]);
 
-  const handleApplyFilter = () => setFromDate(inputDate);
-  const handleClearFilter = () => { setFromDate(""); setInputDate(""); };
+  const handleApplyFilter = () => { setFromDate(inputFrom); setToDate(inputTo); };
+  const handleClearFilter = () => {
+    const start = getMonthStart(); const end = getToday();
+    setFromDate(start); setToDate(end);
+    setInputFrom(start); setInputTo(end);
+  };
 
   if (isLoading) {
     return (
@@ -113,7 +127,7 @@ export default function PixelAnalyticsPage() {
         title="Área de Analytics"
         description="Esta área requer autenticação administrativa. Digite a senha para acessar os dados analíticos e métricas."
       />
-      
+
       <div className="container mx-auto py-8">
         <Heading
           title="Analytics de Pixels"
@@ -124,27 +138,35 @@ export default function PixelAnalyticsPage() {
         {/* Filtro de data */}
         <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-muted/40 rounded-lg border">
           <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-sm font-medium whitespace-nowrap">Exibir a partir de:</span>
-          <Input
-            type="date"
-            value={inputDate}
-            onChange={(e) => setInputDate(e.target.value)}
-            className="w-44 h-8 text-sm"
-          />
-          <Button size="sm" onClick={handleApplyFilter} disabled={!inputDate}>
+          <span className="text-sm font-medium whitespace-nowrap">Período:</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">De:</span>
+            <Input
+              type="date"
+              value={inputFrom}
+              onChange={(e) => setInputFrom(e.target.value)}
+              className="w-40 h-8 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Até:</span>
+            <Input
+              type="date"
+              value={inputTo}
+              onChange={(e) => setInputTo(e.target.value)}
+              className="w-40 h-8 text-sm"
+            />
+          </div>
+          <Button size="sm" onClick={handleApplyFilter}>
             Aplicar
           </Button>
-          {fromDate && (
-            <Button size="sm" variant="ghost" onClick={handleClearFilter} className="gap-1">
-              <X className="h-3 w-3" />
-              Limpar filtro
-            </Button>
-          )}
-          {fromDate && (
-            <span className="text-xs text-muted-foreground">
-              Mostrando dados desde {new Date(fromDate + "T00:00:00").toLocaleDateString("pt-BR")}
-            </span>
-          )}
+          <Button size="sm" variant="ghost" onClick={handleClearFilter} className="gap-1">
+            <X className="h-3 w-3" />
+            Mês atual
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {new Date(fromDate + "T00:00:00").toLocaleDateString("pt-BR")} — {new Date(toDate + "T00:00:00").toLocaleDateString("pt-BR")}
+          </span>
         </div>
 
         {/* Resumo Principal */}
@@ -156,7 +178,7 @@ export default function PixelAnalyticsPage() {
           }
         >
           <div className="mb-6">
-            <PixelAnalytics fromDate={fromDate} />
+            <PixelAnalytics fromDate={fromDate} toDate={toDate} />
           </div>
         </Suspense>
 
@@ -164,13 +186,13 @@ export default function PixelAnalyticsPage() {
         <div className="mb-6">
           <h2 className="text-lg font-semibold mb-4">Análise de Tráfego</h2>
           <Suspense fallback={<ChartSkeleton />}>
-            <TrafficSources fromDate={fromDate} />
+            <TrafficSources fromDate={fromDate} toDate={toDate} />
           </Suspense>
         </div>
 
         {/* Lista de Leads */}
         <Suspense fallback={<ChartSkeleton />}>
-          <EventsList fromDate={fromDate} />
+          <EventsList fromDate={fromDate} toDate={toDate} />
         </Suspense>
       </div>
     </>
