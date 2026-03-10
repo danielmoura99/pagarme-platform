@@ -1,24 +1,20 @@
 // app/(dashboard)/analytics/page.tsx
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Heading } from "@/components/ui/heading";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import AdminPasswordModal from "@/components/auth/admin-password-modal";
 import { useAdminAuth } from "@/hooks/use-admin-auth";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, Calendar, X } from "lucide-react";
 
-// Componentes existentes
 import { PixelAnalytics } from "./_components/pixel-analytics";
 import { EventsList } from "./_components/event-list";
-import { ConversionChart } from "./_components/conversion-chart";
-
-// Novos componentes
-import { ConversionFunnel } from "./_components/conversion-funnel";
 import { TrafficSources } from "./_components/traffic-sources";
-import { PeriodComparison } from "./_components/period-comparison";
 
 // Componente de loading para os cards
 function AnalyticsCardSkeleton() {
@@ -51,15 +47,18 @@ function ChartSkeleton() {
 
 export default function PixelAnalyticsPage() {
   const { isAuthenticated, isLoading, showModal, authenticate, onSuccess, onClose } = useAdminAuth();
+  const [fromDate, setFromDate] = useState<string>("");
+  const [inputDate, setInputDate] = useState<string>("");
 
-  // Verificar autenticação ao carregar a página
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       authenticate();
     }
   }, [isLoading, isAuthenticated, authenticate]);
 
-  // Loading state enquanto verifica autenticação
+  const handleApplyFilter = () => setFromDate(inputDate);
+  const handleClearFilter = () => { setFromDate(""); setInputDate(""); };
+
   if (isLoading) {
     return (
       <div className="container mx-auto py-8">
@@ -116,77 +115,63 @@ export default function PixelAnalyticsPage() {
       />
       
       <div className="container mx-auto py-8">
-      <Heading
-        title="Analytics de Pixels"
-        description="Acompanhe o desempenho dos seus pixels de rastreamento"
-      />
-      <Separator className="my-4" />
+        <Heading
+          title="Analytics de Pixels"
+          description="Acompanhe o desempenho dos seus pixels de rastreamento"
+        />
+        <Separator className="my-4" />
 
-      {/* Resumo Principal */}
-      <Suspense
-        fallback={
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-            {[...Array(4)].map((_, i) => (
-              <AnalyticsCardSkeleton key={i} />
-            ))}
-          </div>
-        }
-      >
-        <div className="mb-6">
-          <PixelAnalytics />
+        {/* Filtro de data */}
+        <div className="flex flex-wrap items-center gap-3 mb-6 p-4 bg-muted/40 rounded-lg border">
+          <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium whitespace-nowrap">Exibir a partir de:</span>
+          <Input
+            type="date"
+            value={inputDate}
+            onChange={(e) => setInputDate(e.target.value)}
+            className="w-44 h-8 text-sm"
+          />
+          <Button size="sm" onClick={handleApplyFilter} disabled={!inputDate}>
+            Aplicar
+          </Button>
+          {fromDate && (
+            <Button size="sm" variant="ghost" onClick={handleClearFilter} className="gap-1">
+              <X className="h-3 w-3" />
+              Limpar filtro
+            </Button>
+          )}
+          {fromDate && (
+            <span className="text-xs text-muted-foreground">
+              Mostrando dados desde {new Date(fromDate + "T00:00:00").toLocaleDateString("pt-BR")}
+            </span>
+          )}
         </div>
-      </Suspense>
 
-      {/* Comparação de Períodos */}
-      <Suspense fallback={<ChartSkeleton />}>
-        <div className="mb-6">
-          <PeriodComparison />
-        </div>
-      </Suspense>
-
-      {/* Seção de Análise de Tráfego */}
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold mb-4">Análise de Tráfego</h2>
+        {/* Resumo Principal */}
         <Suspense
           fallback={
-            <div className="grid gap-4 md:grid-cols-2">
-              <ChartSkeleton />
-              <ChartSkeleton />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+              {[...Array(4)].map((_, i) => <AnalyticsCardSkeleton key={i} />)}
             </div>
           }
         >
-          <TrafficSources />
+          <div className="mb-6">
+            <PixelAnalytics fromDate={fromDate} />
+          </div>
         </Suspense>
-      </div>
 
-      {/* Seção de Funil e Conversão */}
-      <div className="grid gap-6 lg:grid-cols-3 mb-6">
-        {/* Funil de Conversão */}
-        <div className="lg:col-span-1">
+        {/* Análise de Tráfego */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-4">Análise de Tráfego</h2>
           <Suspense fallback={<ChartSkeleton />}>
-            <ConversionFunnel />
+            <TrafficSources fromDate={fromDate} />
           </Suspense>
         </div>
 
-        {/* Gráficos de Conversão */}
-        <div className="lg:col-span-2">
-          <Suspense
-            fallback={
-              <div className="grid gap-4 md:grid-cols-2">
-                <ChartSkeleton />
-                <ChartSkeleton />
-              </div>
-            }
-          >
-            <ConversionChart />
-          </Suspense>
-        </div>
-      </div>
-
-      {/* Lista de Leads e Conversões */}
-      <Suspense fallback={<ChartSkeleton />}>
-        <EventsList />
-      </Suspense>
+        {/* Lista de Leads */}
+        <Suspense fallback={<ChartSkeleton />}>
+          <EventsList fromDate={fromDate} />
+        </Suspense>
       </div>
     </>
   );

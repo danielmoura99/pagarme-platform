@@ -9,14 +9,15 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") || "30");
+    const fromParam = searchParams.get("from");
 
-    // Calcular data de início
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = fromParam
+      ? new Date(fromParam + "T00:00:00")
+      : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
 
-    // Contar eventos por tipo (funil)
+    // Eventos do funil (topo e meio): PageView, ViewContent, InitiateCheckout, AddPaymentInfo
     const funnelData = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         "eventType" as event_type,
         COUNT(*) as count
       FROM "PixelEventLog"
@@ -24,15 +25,22 @@ export async function GET(request: Request) {
       GROUP BY "eventType"
     `;
 
-    // Converter array de resultados em objeto para facilitar o uso
     const eventCounts = (funnelData as any[]).reduce((acc, item) => {
       acc[item.event_type] = Number(item.count);
       return acc;
-    }, {});
+    }, {} as Record<string, number>);
 
-    // Também vamos contar sessões únicas para cada etapa
+    // Purchase: usar Order como fonte confiável (inclui PIX e browser fechado)
+    const paidOrderCount = await prisma.order.count({
+      where: {
+        status: "paid",
+        createdAt: { gte: fromDate },
+      },
+    });
+
+    // Sessões únicas por etapa (PixelEventLog — topo/meio do funil)
     const uniqueSessionFunnel = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         "eventType",
         COUNT(DISTINCT "sessionId") as unique_sessions
       FROM "PixelEventLog"
@@ -46,41 +54,37 @@ export async function GET(request: Request) {
         acc[item.eventType] = Number(item.unique_sessions);
         return acc;
       },
-      {}
+      {} as Record<string, number>
     );
 
-    // Estruturar dados do funil
+    const initiateCheckout = eventCounts["InitiateCheckout"] || 0;
+    const purchases = paidOrderCount; // fonte confiável
+
     const funnel = {
-      // Contagem total de eventos
       pageViews: eventCounts["PageView"] || 0,
       viewContent: eventCounts["ViewContent"] || 0,
-      initiateCheckout: eventCounts["InitiateCheckout"] || 0,
+      initiateCheckout,
       addPaymentInfo: eventCounts["AddPaymentInfo"] || 0,
-      purchases: eventCounts["Purchase"] || 0,
+      purchases,
 
-      // Sessões únicas (usuários únicos)
       uniqueSessions: {
         pageViews: uniqueSessionCounts["PageView"] || 0,
         viewContent: uniqueSessionCounts["ViewContent"] || 0,
         initiateCheckout: uniqueSessionCounts["InitiateCheckout"] || 0,
         addPaymentInfo: uniqueSessionCounts["AddPaymentInfo"] || 0,
-        purchases: uniqueSessionCounts["Purchase"] || 0,
+        purchases, // mesmo valor — Order é a verdade
       },
 
-      // Taxas de conversão
       conversionRates: {
         viewToCheckout:
           eventCounts["ViewContent"] > 0
-            ? (eventCounts["InitiateCheckout"] / eventCounts["ViewContent"]) *
-              100
+            ? (initiateCheckout / eventCounts["ViewContent"]) * 100
             : 0,
         checkoutToPurchase:
-          eventCounts["InitiateCheckout"] > 0
-            ? (eventCounts["Purchase"] / eventCounts["InitiateCheckout"]) * 100
-            : 0,
+          initiateCheckout > 0 ? (purchases / initiateCheckout) * 100 : 0,
         overallConversion:
           eventCounts["ViewContent"] > 0
-            ? (eventCounts["Purchase"] / eventCounts["ViewContent"]) * 100
+            ? (purchases / eventCounts["ViewContent"]) * 100
             : 0,
       },
     };
@@ -103,11 +107,7 @@ export async function GET(request: Request) {
           addPaymentInfo: 0,
           purchases: 0,
         },
-        conversionRates: {
-          viewToCheckout: 0,
-          checkoutToPurchase: 0,
-          overallConversion: 0,
-        },
+        conversionRates: { viewToCheckout: 0, checkoutToPurchase: 0, overallConversion: 0 },
       },
       { status: 500 }
     );

@@ -50,7 +50,7 @@ export function ResponsiveCheckoutBanner({
       {/* Banner Desktop */}
       {desktopImageUrl && (
         <div
-          className={`hidden lg:block w-full h-full transition-opacity duration-300 ${
+          className={`hidden lg:block w-full h-full relative transition-opacity duration-300 ${
             desktopLoaded ? "opacity-100" : "opacity-0"
           }`}
         >
@@ -70,7 +70,7 @@ export function ResponsiveCheckoutBanner({
       {/* Banner Mobile */}
       {effectiveMobileImage && (
         <div
-          className={`block lg:hidden w-full h-full transition-opacity duration-300 ${
+          className={`block lg:hidden w-full h-full relative transition-opacity duration-300 ${
             mobileLoaded ? "opacity-100" : "opacity-0"
           }`}
         >

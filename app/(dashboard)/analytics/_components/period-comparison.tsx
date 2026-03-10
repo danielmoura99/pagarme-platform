@@ -18,29 +18,31 @@ interface ComparisonData {
   previous: PeriodData;
 }
 
-export function PeriodComparison() {
+export function PeriodComparison({ fromDate }: { fromDate?: string }) {
   const [period, setPeriod] = useState<"7d" | "30d" | "90d">("30d");
   const [data, setData] = useState<ComparisonData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchComparisonData();
-  }, [period]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, fromDate]);
 
   const fetchComparisonData = async () => {
     try {
       setLoading(true);
-      // Buscar dados do período atual
-      const currentResponse = await fetch(
-        `/api/analytics/pixels?days=${period.slice(0, -1)}`
-      );
+      const days = parseInt(period.slice(0, -1));
+
+      const currentParams = new URLSearchParams();
+      if (fromDate) currentParams.set("from", fromDate);
+      else currentParams.set("days", String(days));
+      const currentResponse = await fetch(`/api/analytics/pixels?${currentParams}`);
       const currentData = await currentResponse.json();
 
-      // Buscar dados do período anterior
-      const previousDays = parseInt(period.slice(0, -1)) * 2;
-      const previousResponse = await fetch(
-        `/api/analytics/pixels?days=${previousDays}`
-      );
+      // Período anterior: só faz sentido quando não há fromDate
+      const previousParams = new URLSearchParams();
+      previousParams.set("days", String(days * 2));
+      const previousResponse = await fetch(`/api/analytics/pixels?${previousParams}`);
       const previousData = await previousResponse.json();
 
       // Calcular dados do período anterior (subtraindo o período atual)

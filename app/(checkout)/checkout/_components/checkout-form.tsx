@@ -166,17 +166,6 @@ export function CheckoutForm({
     form.trigger();
   };
 
-  // Adicione isso no início do componente
-  useEffect(() => {
-    const subscription = form.watch((value) => {
-      console.log("Valores do formulário alterados:", value);
-      console.log("Estado do formulário:", form.formState);
-      console.log("Erros de validação:", form.formState.errors);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [form]);
-
   // Input Masks
   const phoneRef = useMask({
     mask: "(__) _____-____",
@@ -192,6 +181,23 @@ export function CheckoutForm({
   });
   const cardExpiryRef = useMask({ mask: "__/__", replacement: { _: /\d/ } });
 
+  // Captura UTMs do browser no momento do submit
+  const getUTMData = () => {
+    if (typeof window === "undefined") return {};
+    const urlParams = new URLSearchParams(window.location.search);
+    const ss = window.sessionStorage;
+    const ls = window.localStorage;
+    return {
+      utmSource:   urlParams.get("utm_source")   || ss.getItem("utm_source")   || ls.getItem("utm_source_backup")   || null,
+      utmMedium:   urlParams.get("utm_medium")   || ss.getItem("utm_medium")   || ls.getItem("utm_medium_backup")   || null,
+      utmCampaign: urlParams.get("utm_campaign") || ss.getItem("utm_campaign") || ls.getItem("utm_campaign_backup") || null,
+      utmTerm:     urlParams.get("utm_term")     || ss.getItem("utm_term")     || null,
+      utmContent:  urlParams.get("utm_content")  || ss.getItem("utm_content")  || null,
+      referrer:    document.referrer             || null,
+      landingPage: ss.getItem("landing_page")    || null,
+    };
+  };
+
   const onSubmit = async (data: CheckoutFormValues) => {
     try {
       // Verificar se os termos foram aceitos
@@ -204,15 +210,8 @@ export function CheckoutForm({
         });
         return;
       }
-      // Se já está em processo de submissão, impedir nova tentativa
-      if (isSubmitting) {
-        console.log(
-          "Formulário já está sendo enviado, ignorando clique duplicado"
-        );
-        return;
-      }
+      if (isSubmitting) return;
 
-      console.log("Iniciando submissão do formulário...");
       setLoading(true);
       setIsSubmitting(true); // Bloqueio adicional
 
@@ -240,6 +239,8 @@ export function CheckoutForm({
         affiliateRef,
         coupon: appliedCoupon,
         checkoutId: checkoutIdRef.current,
+        // UTMs capturados no momento do submit (campos opcionais)
+        ...getUTMData(),
         // Se for cartão, incluir os dados
         ...(paymentMethod === "credit_card" && {
           cardData: {
@@ -250,13 +251,6 @@ export function CheckoutForm({
           },
         }),
       };
-
-      console.log("[Checkout] Enviando pagamento:", {
-        method: payload.paymentMethod,
-        amount: payload.product.price,
-        checkoutId: payload.checkoutId,
-        hasCoupon: !!payload.coupon,
-      });
 
       const response = await fetch("/api/checkout", {
         method: "POST",
@@ -272,6 +266,13 @@ export function CheckoutForm({
       const result = await response.json();
 
       if (paymentMethod === "pix") {
+        // Persistir UTMs no localStorage antes do redirect (PIX navega para outra página)
+        const utmData = getUTMData();
+        if (utmData.utmSource)   localStorage.setItem("utm_source_backup",   utmData.utmSource);
+        if (utmData.utmMedium)   localStorage.setItem("utm_medium_backup",   utmData.utmMedium);
+        if (utmData.utmCampaign) localStorage.setItem("utm_campaign_backup", utmData.utmCampaign);
+        if (utmData.landingPage) localStorage.setItem("landing_page_backup", utmData.landingPage);
+
         // Redireciona para página de PIX com todos os dados necessários
         window.location.href = `/processing?${new URLSearchParams({
           orderId: result.orderId,

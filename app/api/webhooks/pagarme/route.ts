@@ -115,6 +115,9 @@ async function handleOrderPaid(data: any) {
         // Para evitar duplicatas, o envio para RD Station agora acontece quando
         // o evento Purchase é registrado em /api/pixels/events
         console.log("[HANDLE_ORDER_PAID] RD Station sync via pixel event - webhook sync disabled to prevent duplicates");
+
+        // Gerar Purchase pixel event server-side (garante analytics mesmo sem frontend)
+        await createPurchasePixelEvents(updatedOrder.id);
       } else {
         console.error(
           "[HANDLE_ORDER_PAID_ERROR] Pedido não encontrado com pagarmeTransactionId:",
@@ -153,6 +156,9 @@ async function handleOrderPaid(data: any) {
 
           // 🚀 RD STATION SYNC DESABILITADO - Fallback também usa pixel event
           console.log("[HANDLE_ORDER_PAID_FALLBACK] RD Station sync via pixel event - webhook sync disabled to prevent duplicates");
+
+          // Gerar Purchase pixel event server-side (fallback flow)
+          await createPurchasePixelEvents(fallbackOrder.id);
         } catch (fallbackError) {
           console.error(
             "[HANDLE_ORDER_PAID_ERROR] Falha na busca alternativa:",
@@ -382,3 +388,81 @@ export const PUT = () =>
   new NextResponse("Método não permitido", { status: 405 });
 export const DELETE = () =>
   new NextResponse("Método não permitido", { status: 405 });
+
+// Gera PixelEventLog de Purchase server-side (fonte confiável, independente do browser)
+// Chamada APÓS atualizar o status da Order — não interfere no fluxo Pagar.me
+async function createPurchasePixelEvents(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        customer: true,
+        items: {
+          include: {
+            product: {
+              include: {
+                pixelConfigs: {
+                  where: { enabled: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      console.log("[PIXEL_SERVER_SIDE] Order não encontrada:", orderId);
+      return;
+    }
+
+    for (const item of order.items) {
+      for (const pixelConfig of item.product.pixelConfigs) {
+        // Deduplicar: só criar se ainda não existir Purchase para este orderId + pixelConfig
+        const existing = await prisma.pixelEventLog.findFirst({
+          where: {
+            pixelConfigId: pixelConfig.id,
+            eventType: "Purchase",
+            orderId: order.id,
+          },
+        });
+
+        if (existing) {
+          console.log(
+            `[PIXEL_SERVER_SIDE] Purchase já existe para pixelConfig=${pixelConfig.id} orderId=${order.id} — ignorando`
+          );
+          continue;
+        }
+
+        await prisma.pixelEventLog.create({
+          data: {
+            pixelConfigId: pixelConfig.id,
+            eventType: "Purchase",
+            eventData: {
+              value: order.amount / 100,
+              currency: "BRL",
+              content_name: item.product.name,
+              email: order.customer?.email ?? null,
+              server_side: true,
+            },
+            orderId: order.id,
+            source:      order.utmSource   ?? null,
+            medium:      order.utmMedium   ?? null,
+            campaign:    order.utmCampaign ?? null,
+            term:        order.utmTerm     ?? null,
+            content:     order.utmContent  ?? null,
+            referrer:    order.referrer    ?? null,
+            landingPage: order.landingPage ?? null,
+          },
+        });
+
+        console.log(
+          `[PIXEL_SERVER_SIDE] Purchase criado — pixelConfig=${pixelConfig.id} orderId=${order.id} source=${order.utmSource}`
+        );
+      }
+    }
+  } catch (error) {
+    // Não relançar — falha no pixel não pode derrubar o webhook
+    console.error("[PIXEL_SERVER_SIDE_ERROR] Erro ao criar Purchase events:", error);
+  }
+}

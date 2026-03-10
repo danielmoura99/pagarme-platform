@@ -29,20 +29,21 @@ interface ChartData {
   };
 }
 
-export function ConversionChart() {
+export function ConversionChart({ fromDate }: { fromDate?: string }) {
   const [data, setData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchChartData();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromDate]);
 
   const fetchChartData = async () => {
     try {
-      const response = await fetch("/api/analytics/pixels");
+      const params = new URLSearchParams();
+      if (fromDate) params.set("from", fromDate);
+      const response = await fetch(`/api/analytics/pixels?${params}`);
       const result = await response.json();
-
-      console.log("ConversionChart - Dados recebidos:", result);
       setData(result);
     } catch (error) {
       console.error("Failed to fetch chart data:", error);
@@ -85,11 +86,6 @@ export function ConversionChart() {
       eventType: item.eventType,
       count: item.count,
     })) || [];
-
-  console.log("ConversionChart - Dados formatados:", {
-    formattedDayData,
-    formattedTypeData,
-  });
 
   return (
     <div className="grid gap-4 md:grid-cols-2">

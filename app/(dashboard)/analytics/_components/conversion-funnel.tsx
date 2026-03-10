@@ -19,17 +19,20 @@ interface FunnelData {
   };
 }
 
-export function ConversionFunnel() {
+export function ConversionFunnel({ fromDate }: { fromDate?: string }) {
   const [data, setData] = useState<FunnelData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchFunnelData();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromDate]);
 
   const fetchFunnelData = async () => {
     try {
-      const response = await fetch("/api/analytics/funnel");
+      const params = new URLSearchParams();
+      if (fromDate) params.set("from", fromDate);
+      const response = await fetch(`/api/analytics/funnel?${params}`);
       const result = await response.json();
       setData(result);
     } catch (error) {

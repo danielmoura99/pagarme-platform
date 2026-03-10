@@ -101,7 +101,6 @@ export default function CheckoutContent() {
       discountPercentage: number;
     } | null
   ) => {
-    console.log("Cupom aplicado no CheckoutContent:", coupon);
     setAppliedCoupon(coupon);
   };
 

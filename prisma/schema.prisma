@@ -160,10 +160,21 @@ model Order {
   attempts          Int       @default(1) // Número de tentativas
   lastAttemptAt     DateTime? // Timestamp da última tentativa
 
+  // Rastreamento de origem (UTM) — todos nullable, retrocompatíveis
+  utmSource         String?   // utm_source (facebook, google, etc)
+  utmMedium         String?   // utm_medium (cpc, organic, etc)
+  utmCampaign       String?   // utm_campaign
+  utmTerm           String?   // utm_term
+  utmContent        String?   // utm_content
+  referrer          String?   // URL de referência
+  landingPage       String?   // Primeira página da sessão
+
   @@index([checkoutId])
   @@index([status])
   @@index([createdAt])
   @@index([status, createdAt])
+  @@index([utmSource])
+  @@index([utmCampaign])
 }
 
 model OrderBump {

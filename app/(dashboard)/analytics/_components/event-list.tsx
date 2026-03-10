@@ -42,7 +42,7 @@ interface EventsData {
   totalPages: number;
 }
 
-export function EventsList() {
+export function EventsList({ fromDate }: { fromDate?: string }) {
   const [events, setEvents] = useState<LeadEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -50,15 +50,21 @@ export function EventsList() {
   const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [fromDate]);
+
+  useEffect(() => {
     fetchEvents(currentPage);
-  }, [currentPage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, fromDate]);
 
   const fetchEvents = async (page: number) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/analytics/pixels?page=${page}&limit=20`);
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (fromDate) params.set("from", fromDate);
+      const response = await fetch(`/api/analytics/pixels?${params}`);
       const result: EventsData = await response.json();
-      console.log("EventsList - Dados recebidos:", result);
       setEvents(result.leadEvents || []);
       setTotalPages(result.totalPages || 1);
       setTotalCount(result.totalCount || 0);

@@ -328,32 +328,14 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   // Função para verificar se deve disparar pixel baseado na fonte de tráfego
   const shouldFirePixel = (platform: string, trafficSource: ReturnType<typeof getTrafficSource>) => {
     switch (platform) {
-      case "facebook":
-        // Facebook Pixel: só dispara para tráfego pago do Facebook/Instagram
-        return (trafficSource.source === "facebook" || trafficSource.source === "instagram") && 
-               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
-      
       case "google_ads":
-        // Google Ads: só dispara para tráfego pago do Google
-        return trafficSource.source === "google" && 
+        // Google Ads: só dispara para tráfego pago do Google (evita atribuição incorreta)
+        return trafficSource.source === "google" &&
                (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
-      
-      case "google_analytics":
-        // Google Analytics: recebe TODOS os eventos para análise geral
-        return true;
-      
-      case "tiktok":
-        // TikTok: só dispara para tráfego pago do TikTok
-        return trafficSource.source === "tiktok" && 
-               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
-      
-      case "snapchat":
-        // Snapchat: só dispara para tráfego pago do Snapchat
-        return trafficSource.source === "snapchat" && 
-               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
-      
+
+      // Facebook, TikTok, Snapchat, Google Analytics e demais: disparam sempre.
+      // Cada plataforma usa seu próprio algoritmo de atribuição — não filtramos aqui.
       default:
-        // Outras plataformas: por padrão, dispara
         return true;
     }
   };

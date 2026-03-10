@@ -11,62 +11,47 @@ export async function GET(request: Request) {
     const days = parseInt(searchParams.get("days") || "30");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
+    const fromParam = searchParams.get("from");
 
-    // Calcular data de início
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = fromParam
+      ? new Date(fromParam + "T00:00:00")
+      : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
 
-    // Usar query SQL raw para estatísticas principais (corrigindo nomes das colunas)
+    // Total de eventos de rastreamento (PixelEventLog — inclui todos os eventos do funil)
     const eventStats = await prisma.$queryRaw`
-      SELECT 
-        COUNT(*) as total_events,
-        COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as total_conversions,
-        COALESCE(
-          SUM(
-            CASE 
-              WHEN "eventType" = 'Purchase' 
-              AND jsonb_typeof("eventData"->'value') = 'number'
-              THEN ("eventData"->>'value')::float 
-              ELSE 0 
-            END
-          ), 
-          0
-        ) as total_revenue
+      SELECT COUNT(*) as total_events
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
     `;
-
-    // Converter o resultado para formato TypeScript
     const stats = Array.isArray(eventStats) ? eventStats[0] : eventStats;
     const totalEvents = Number(stats?.total_events || 0);
-    const totalConversions = Number(stats?.total_conversions || 0);
-    const totalRevenue = Number(stats?.total_revenue || 0);
 
-    // Calcular taxa de conversão
-    const conversionRate =
-      totalEvents > 0 ? (totalConversions / totalEvents) * 100 : 0;
+    // Conversões e receita reais: Order é a fonte confiável (inclui PIX, browser fechado, etc.)
+    const orderStats = await prisma.$queryRaw`
+      SELECT
+        COUNT(*) as total_conversions,
+        COALESCE(SUM(amount), 0) as total_revenue_cents
+      FROM "Order"
+      WHERE status = 'paid'
+        AND "createdAt" >= ${fromDate}
+    `;
+    const oStats = Array.isArray(orderStats) ? orderStats[0] : orderStats;
+    const totalConversions = Number(oStats?.total_conversions || 0);
+    const totalRevenue = Number(oStats?.total_revenue_cents || 0) / 100;
 
-    // Eventos por tipo (usando Prisma ORM)
+    const conversionRate = totalEvents > 0 ? (totalConversions / totalEvents) * 100 : 0;
+
+    // Eventos por tipo
     const eventsByType = await prisma.pixelEventLog.groupBy({
       by: ["eventType"],
-      _count: {
-        id: true,
-      },
-      where: {
-        createdAt: {
-          gte: fromDate,
-        },
-      },
-      orderBy: {
-        _count: {
-          id: "desc",
-        },
-      },
+      _count: { id: true },
+      where: { createdAt: { gte: fromDate } },
+      orderBy: { _count: { id: "desc" } },
     });
 
-    // Eventos por dia (últimos N dias) - corrigindo nomes das colunas
+    // Eventos por dia
     const eventsByDay = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         DATE("createdAt") as date,
         COUNT(*) as total_events,
         COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as conversions
@@ -77,116 +62,75 @@ export async function GET(request: Request) {
       LIMIT ${days}
     `;
 
-    // Pixels por plataforma
+    // Pixels ativos por plataforma
     const pixelsByPlatform = await prisma.pixelConfig.groupBy({
       by: ["platform"],
-      _count: {
-        id: true,
-      },
-      where: {
-        enabled: true,
-      },
+      _count: { id: true },
+      where: { enabled: true },
     });
 
-    // Contar total de eventos para paginação
+    // Paginação dos lead events
     const totalCount = await prisma.pixelEventLog.count({
       where: {
-        createdAt: {
-          gte: fromDate,
-        },
+        createdAt: { gte: fromDate },
         OR: [
-          { orderId: { not: null } }, // Eventos com pedidos
-          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } } // Eventos importantes
-        ]
-      }
+          { orderId: { not: null } },
+          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } },
+        ],
+      },
     });
 
-    // Calcular paginação
     const totalPages = Math.ceil(totalCount / limit);
     const skip = (page - 1) * limit;
 
-    // Eventos com dados de leads (do mais novo para o mais antigo)
     const leadEvents = await prisma.pixelEventLog.findMany({
       take: limit,
-      skip: skip,
-      orderBy: { createdAt: "desc" }, // Do mais novo para o mais antigo
+      skip,
+      orderBy: { createdAt: "desc" },
       where: {
-        createdAt: {
-          gte: fromDate,
-        },
+        createdAt: { gte: fromDate },
         OR: [
-          { orderId: { not: null } }, // Eventos com pedidos
-          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } } // Eventos importantes
-        ]
+          { orderId: { not: null } },
+          { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } },
+        ],
       },
       include: {
         pixelConfig: {
           select: {
             platform: true,
             pixelId: true,
-            product: {
-              select: {
-                name: true,
-              },
-            },
+            product: { select: { name: true } },
           },
         },
       },
     });
 
-    // Buscar dados dos pedidos para os eventos que têm orderId
-    const orderIds = leadEvents
-      .map(event => event.orderId)
-      .filter(Boolean) as string[];
+    // Enriquecer lead events com dados do pedido/cliente
+    const orderIds = leadEvents.map((e) => e.orderId).filter(Boolean) as string[];
+    const orders = orderIds.length > 0
+      ? await prisma.order.findMany({
+          where: { id: { in: orderIds } },
+          include: { customer: { select: { name: true, email: true, document: true } } },
+        })
+      : [];
+    const orderMap = orders.reduce((acc, o) => { acc[o.id] = o; return acc; }, {} as Record<string, typeof orders[0]>);
 
-    const orders = orderIds.length > 0 ? await prisma.order.findMany({
-      where: {
-        id: { in: orderIds }
-      },
-      include: {
-        customer: {
-          select: {
-            name: true,
-            email: true,
-            document: true
-          }
-        }
-      }
-    }) : [];
-
-    // Criar um mapa de pedidos para facilitar o lookup
-    const orderMap = orders.reduce((acc, order) => {
-      acc[order.id] = order;
-      return acc;
-    }, {} as Record<string, typeof orders[0]>);
-
-    // Top produtos por conversões - corrigindo nomes das colunas
+    // Top produtos por receita real (Order)
     const topProducts = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         p.name as product_name,
-        COUNT(pel.id) as total_events,
-        COUNT(CASE WHEN pel."eventType" = 'Purchase' THEN 1 END) as conversions,
-        COALESCE(
-          SUM(
-            CASE 
-              WHEN pel."eventType" = 'Purchase' 
-              AND jsonb_typeof(pel."eventData"->'value') = 'number'
-              THEN (pel."eventData"->>'value')::float 
-              ELSE 0 
-            END
-          ), 
-          0
-        ) as revenue
-      FROM "PixelEventLog" pel
-      JOIN "PixelConfig" pc ON pc.id = pel."pixelConfigId"
-      JOIN "Product" p ON p.id = pc."productId"
-      WHERE pel."createdAt" >= ${fromDate}
+        COUNT(DISTINCT o.id) as conversions,
+        COALESCE(SUM(oi.price * oi.quantity), 0) as revenue_cents
+      FROM "Order" o
+      JOIN "OrderItem" oi ON oi."orderId" = o.id
+      JOIN "Product" p ON p.id = oi."productId"
+      WHERE o.status = 'paid'
+        AND o."createdAt" >= ${fromDate}
       GROUP BY p.id, p.name
-      ORDER BY conversions DESC, revenue DESC
+      ORDER BY revenue_cents DESC
       LIMIT 5
     `;
 
-    // Formatar dados para retorno
     return NextResponse.json({
       summary: {
         totalEvents,
@@ -213,18 +157,16 @@ export async function GET(request: Request) {
       },
       topProducts: (topProducts as any[]).map((item) => ({
         productName: item.product_name,
-        totalEvents: Number(item.total_events),
+        totalEvents: Number(item.conversions),
         conversions: Number(item.conversions),
-        revenue: Number(item.revenue),
+        revenue: Number(item.revenue_cents) / 100,
       })),
-      // Dados de paginação
       totalCount,
       currentPage: page,
       totalPages,
       leadEvents: leadEvents.map((event) => {
         const order = event.orderId ? orderMap[event.orderId] : null;
         const eventData = event.eventData as any;
-        
         return {
           id: event.id,
           eventType: event.eventType,
@@ -232,23 +174,14 @@ export async function GET(request: Request) {
           productName: event.pixelConfig.product.name,
           timestamp: event.createdAt,
           data: eventData,
-          value: (() => {
-            try {
-              return eventData?.value || null;
-            } catch {
-              return null;
-            }
-          })(),
-          // Dados do lead/cliente
+          value: eventData?.value || null,
           customerName: order?.customer?.name || null,
           customerEmail: order?.customer?.email || null,
           customerDocument: order?.customer?.document || null,
-          // Dados do pedido
           orderId: event.orderId,
           orderStatus: order?.status || null,
           paymentMethod: order?.paymentMethod || null,
           installments: order?.installments || null,
-          // Dados de tracking
           source: event.source || null,
           campaign: event.campaign || null,
           medium: event.medium || null,
@@ -258,25 +191,13 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error("[ANALYTICS_ERROR]", error);
-
-    // Retornar uma resposta de erro estruturada
     return NextResponse.json(
       {
         error: "Failed to fetch analytics",
         message: error instanceof Error ? error.message : "Unknown error",
-        summary: {
-          totalEvents: 0,
-          totalConversions: 0,
-          totalRevenue: 0,
-          conversionRate: 0,
-        },
-        charts: {
-          eventsByType: [],
-          eventsByDay: [],
-        },
-        platforms: {
-          pixelsByPlatform: [],
-        },
+        summary: { totalEvents: 0, totalConversions: 0, totalRevenue: 0, conversionRate: 0 },
+        charts: { eventsByType: [], eventsByDay: [] },
+        platforms: { pixelsByPlatform: [] },
         topProducts: [],
         totalCount: 0,
         currentPage: 1,

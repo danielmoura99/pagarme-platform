@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npm run build:*)",
       "WebFetch(domain:developers.rdstation.com)",
-      "WebFetch(domain:appstore.rdstation.com)"
+      "WebFetch(domain:appstore.rdstation.com)",
+      "Bash(du -sh /e/pagarme-platform/*)",
+      "Bash(grep -E '\\\\.\\(ts|tsx\\)$')",
+      "Bash(npx tsc --noEmit)"
     ],
     "deny": [],
     "ask": []

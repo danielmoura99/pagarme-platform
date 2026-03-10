@@ -4,23 +4,12 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
 
-// Cache simples em memória (válido por 5 minutos)
-let cachedData: any = null;
-let cacheTimestamp: number = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
-
 export async function GET(request: Request) {
   try {
     const session = await getServerSession();
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Verificar cache
-    const now = Date.now();
-    if (cachedData && (now - cacheTimestamp) < CACHE_DURATION) {
-      return NextResponse.json(cachedData);
     }
 
     const { searchParams } = new URL(request.url);
@@ -81,7 +70,7 @@ export async function GET(request: Request) {
     const salesByMonth: { [key: string]: { count: number; revenue: number } } = {};
 
     for (let i = 0; i < months; i++) {
-      const date = subMonths(now, months - 1 - i);
+      const date = subMonths(currentDate, months - 1 - i);
       const monthKey = format(date, "MMM/yy");
       salesByMonth[monthKey] = { count: 0, revenue: 0 };
     }
@@ -270,10 +259,6 @@ export async function GET(request: Request) {
       affiliateStats,
       topAffiliates,
     };
-
-    // Atualizar cache
-    cachedData = responseData;
-    cacheTimestamp = Date.now();
 
     return NextResponse.json(responseData);
   } catch (error) {

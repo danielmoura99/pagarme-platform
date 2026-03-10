@@ -141,6 +141,14 @@ export async function POST(request: Request) {
       selectedBumps,
       coupon,
       checkoutId,
+      // UTMs (opcionais — não afetam o fluxo Pagar.me)
+      utmSource    = null,
+      utmMedium    = null,
+      utmCampaign  = null,
+      utmTerm      = null,
+      utmContent   = null,
+      referrer     = null,
+      landingPage  = null,
     } = body;
 
     // Verificar se já existe uma transação com este checkoutId
@@ -605,6 +613,14 @@ export async function POST(request: Request) {
             pagarmeErrorResponse || JSON.parse(JSON.stringify(pagarmeError)),
           attempts: 1,
           lastAttemptAt: new Date(),
+          // UTMs de rastreamento (opcionais)
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          utmTerm,
+          utmContent,
+          referrer,
+          landingPage,
           items: {
             create: {
               productId: dbProduct.id,
@@ -683,6 +699,14 @@ export async function POST(request: Request) {
       pagarmeResponse: JSON.parse(JSON.stringify(pagarmeResponse)),
       attempts: 1,
       lastAttemptAt: new Date(),
+      // UTMs de rastreamento (opcionais)
+      utmSource,
+      utmMedium,
+      utmCampaign,
+      utmTerm,
+      utmContent,
+      referrer,
+      landingPage,
       items: {
         create: {
           productId: dbProduct.id,

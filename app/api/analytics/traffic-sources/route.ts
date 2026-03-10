@@ -9,31 +9,20 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") || "30");
+    const fromParam = searchParams.get("from");
 
-    // Calcular data de início
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = fromParam
+      ? new Date(fromParam + "T00:00:00")
+      : (() => { const d = new Date(); d.setDate(d.getDate() - days); return d; })();
 
-    // Analisar por fonte de tráfego
-    const trafficSources = await prisma.$queryRaw`
-      SELECT 
+    // Visitantes por fonte (PixelEventLog — inclui quem não comprou)
+    const visitorsBySource = await prisma.$queryRaw`
+      SELECT
         COALESCE(source, 'direct') as source,
         COALESCE(medium, 'none') as medium,
         COALESCE(campaign, '') as campaign,
         COUNT(DISTINCT "sessionId") as visitors,
-        COUNT(*) as total_events,
-        COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as conversions,
-        COALESCE(
-          SUM(
-            CASE 
-              WHEN "eventType" = 'Purchase' 
-              AND jsonb_typeof("eventData"->'value') = 'number'
-              THEN ("eventData"->>'value')::float 
-              ELSE 0 
-            END
-          ), 
-          0
-        ) as revenue
+        COUNT(*) as total_events
       FROM "PixelEventLog"
       WHERE "createdAt" >= ${fromDate}
         AND "sessionId" IS NOT NULL
@@ -41,71 +30,127 @@ export async function GET(request: Request) {
       ORDER BY visitors DESC
     `;
 
-    // Calcular métricas por fonte
-    const formattedSources = (trafficSources as any[]).map((source) => {
-      const visitors = Number(source.visitors) || 0;
-      const conversions = Number(source.conversions) || 0;
-      const revenue = Number(source.revenue) || 0;
-      const totalEvents = Number(source.total_events) || 0;
+    // Conversões e receita por fonte (Order — fonte confiável, inclui PIX e browser fechado)
+    const conversionsBySource = await prisma.$queryRaw`
+      SELECT
+        COALESCE("utmSource", 'direct') as source,
+        COALESCE("utmMedium", 'none') as medium,
+        COALESCE("utmCampaign", '') as campaign,
+        COUNT(*) as conversions,
+        SUM(amount) as revenue_cents
+      FROM "Order"
+      WHERE status = 'paid'
+        AND "createdAt" >= ${fromDate}
+      GROUP BY "utmSource", "utmMedium", "utmCampaign"
+    `;
+
+    // Indexar conversões para merge eficiente
+    const convMap = new Map<string, { conversions: number; revenue: number }>();
+    (conversionsBySource as any[]).forEach((row) => {
+      const key = `${row.source}||${row.medium}||${row.campaign}`;
+      convMap.set(key, {
+        conversions: Number(row.conversions) || 0,
+        revenue: Number(row.revenue_cents) / 100 || 0,
+      });
+    });
+
+    // Merge visitantes + conversões
+    const formattedSources = (visitorsBySource as any[]).map((row) => {
+      const visitors = Number(row.visitors) || 0;
+      const totalEvents = Number(row.total_events) || 0;
+      const key = `${row.source}||${row.medium}||${row.campaign}`;
+      const conv = convMap.get(key) || { conversions: 0, revenue: 0 };
 
       return {
-        source: source.source || "direct",
-        medium: source.medium || "none",
-        campaign: source.campaign || null, // ✅ Manter null se vazio para filtro funcionar
+        source: row.source || "direct",
+        medium: row.medium || "none",
+        campaign: row.campaign || null,
         visitors,
         totalEvents,
-        conversions,
-        revenue,
-        conversionRate: visitors > 0 ? (conversions / visitors) * 100 : 0,
+        conversions: conv.conversions,
+        revenue: conv.revenue,
+        conversionRate: visitors > 0 ? (conv.conversions / visitors) * 100 : 0,
         eventsPerVisitor: visitors > 0 ? totalEvents / visitors : 0,
-        averageOrderValue: conversions > 0 ? revenue / conversions : 0,
+        averageOrderValue: conv.conversions > 0 ? conv.revenue / conv.conversions : 0,
       };
     });
 
-    // Top campanhas
+    // Adicionar fontes com conversões mas sem visitantes rastreados (ex: PIX sem pixel)
+    (conversionsBySource as any[]).forEach((row) => {
+      const key = `${row.source}||${row.medium}||${row.campaign}`;
+      const alreadyInList = formattedSources.some(
+        (s) => `${s.source}||${s.medium}||${s.campaign || ""}` === key
+      );
+      if (!alreadyInList) {
+        const conv = convMap.get(key) || { conversions: 0, revenue: 0 };
+        formattedSources.push({
+          source: row.source || "direct",
+          medium: row.medium || "none",
+          campaign: row.campaign || null,
+          visitors: 0,
+          totalEvents: 0,
+          conversions: conv.conversions,
+          revenue: conv.revenue,
+          conversionRate: 0,
+          eventsPerVisitor: 0,
+          averageOrderValue: conv.conversions > 0 ? conv.revenue / conv.conversions : 0,
+        });
+      }
+    });
+
+    // Top campanhas: compras + receita (Order) + InitiateCheckout (PixelEventLog)
     const topCampaigns = await prisma.$queryRaw`
-      SELECT 
-        campaign,
-        source,
-        medium,
-        COUNT(DISTINCT "sessionId") as visitors,
-        COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as conversions,
-        COALESCE(
-          SUM(
-            CASE 
-              WHEN "eventType" = 'Purchase' 
-              AND jsonb_typeof("eventData"->'value') = 'number'
-              THEN ("eventData"->>'value')::float 
-              ELSE 0 
-            END
-          ), 
-          0
-        ) as revenue
-      FROM "PixelEventLog"
-      WHERE "createdAt" >= ${fromDate}
-        AND campaign IS NOT NULL 
-        AND campaign != ''
-        AND "sessionId" IS NOT NULL
-      GROUP BY campaign, source, medium
-      ORDER BY conversions DESC, revenue DESC
-      LIMIT 10
+      SELECT
+        o.campaign,
+        o.source,
+        o.medium,
+        o.conversions,
+        o.revenue_cents,
+        COALESCE(ic.initiate_checkout, 0) as initiate_checkout
+      FROM (
+        SELECT
+          "utmCampaign" as campaign,
+          "utmSource" as source,
+          "utmMedium" as medium,
+          COUNT(*) as conversions,
+          SUM(amount) as revenue_cents
+        FROM "Order"
+        WHERE status = 'paid'
+          AND "createdAt" >= ${fromDate}
+          AND "utmCampaign" IS NOT NULL
+          AND "utmCampaign" != ''
+        GROUP BY "utmCampaign", "utmSource", "utmMedium"
+      ) o
+      LEFT JOIN (
+        SELECT
+          campaign,
+          COUNT(*) as initiate_checkout
+        FROM "PixelEventLog"
+        WHERE "eventType" = 'InitiateCheckout'
+          AND "createdAt" >= ${fromDate}
+          AND campaign IS NOT NULL
+          AND campaign != ''
+        GROUP BY campaign
+      ) ic ON ic.campaign = o.campaign
+      ORDER BY o.conversions DESC, o.revenue_cents DESC
+      LIMIT 20
     `;
 
-    // Análise de páginas de entrada (landing pages)
+    // Landing pages (PixelEventLog — é onde registramos a primeira visita)
     const landingPages = await prisma.$queryRaw`
-      SELECT 
+      SELECT
         "landingPage",
         COUNT(DISTINCT "sessionId") as visitors,
         COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as conversions,
         COALESCE(
           SUM(
-            CASE 
-              WHEN "eventType" = 'Purchase' 
+            CASE
+              WHEN "eventType" = 'Purchase'
               AND jsonb_typeof("eventData"->'value') = 'number'
-              THEN ("eventData"->>'value')::float 
-              ELSE 0 
+              THEN ("eventData"->>'value')::float
+              ELSE 0
             END
-          ), 
+          ),
           0
         ) as revenue
       FROM "PixelEventLog"
@@ -122,10 +167,7 @@ export async function GET(request: Request) {
       summary: {
         totalSources: formattedSources.length,
         totalVisitors: formattedSources.reduce((sum, s) => sum + s.visitors, 0),
-        totalConversions: formattedSources.reduce(
-          (sum, s) => sum + s.conversions,
-          0
-        ),
+        totalConversions: formattedSources.reduce((sum, s) => sum + s.conversions, 0),
         totalRevenue: formattedSources.reduce((sum, s) => sum + s.revenue, 0),
         averageConversionRate:
           formattedSources.length > 0
@@ -134,25 +176,25 @@ export async function GET(request: Request) {
             : 0,
       },
       topCampaigns: (topCampaigns as any[]).map((campaign) => {
-        const visitors = Number(campaign.visitors) || 0;
         const conversions = Number(campaign.conversions) || 0;
-        const revenue = Number(campaign.revenue) || 0;
-        
+        const revenue = Number(campaign.revenue_cents) / 100 || 0;
+        const initiateCheckout = Number(campaign.initiate_checkout) || 0;
+
         return {
           campaign: campaign.campaign,
           source: campaign.source,
           medium: campaign.medium,
-          visitors,
+          initiateCheckout,
           conversions,
           revenue,
-          conversionRate: visitors > 0 ? (conversions / visitors) * 100 : 0,
+          conversionRate: initiateCheckout > 0 ? (conversions / initiateCheckout) * 100 : 0,
         };
       }),
       landingPages: (landingPages as any[]).map((page) => {
         const visitors = Number(page.visitors) || 0;
         const conversions = Number(page.conversions) || 0;
         const revenue = Number(page.revenue) || 0;
-        
+
         return {
           url: page.landingPage,
           visitors,
