@@ -14,6 +14,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const integrations = [
   {
+    id: "facebook-ads",
+    name: "Facebook Ads",
+    description: "Importe métricas de campanhas e calcule ROAS, CPA e CPL",
+    logo: "📘",
+    status: "available",
+    category: "Mídia Paga",
+    features: [
+      "Importação de spend, cliques e impressões",
+      "Cálculo de ROAS por campanha",
+      "CPA e CPL reais cruzados com vendas",
+      "Sync automático diário"
+    ],
+    setupUrl: "/integrations/facebook-ads"
+  },
+  {
     id: "rd-station",
     name: "RD Station",
     description: "Plataforma de marketing digital e automação de leads",

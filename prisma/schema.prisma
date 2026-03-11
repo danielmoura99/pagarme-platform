@@ -410,3 +410,89 @@ model RDStationProductConfig {
   @@map("rd_station_product_config")
 }
 
+
+// ===== INTEGRAÇÃO FACEBOOK ADS =====
+
+// Configuração da conta conectada
+model FacebookAdsConfig {
+  id              String    @id @default(cuid())
+  enabled         Boolean   @default(false)
+
+  // OAuth tokens
+  accessToken     String?   @db.Text
+  tokenExpiresAt  DateTime?
+
+  // Conta de anúncios selecionada pelo usuário
+  adAccountId     String?   // formato: act_XXXXXXX
+  adAccountName   String?
+
+  // Sincronização
+  autoSync        Boolean   @default(true)
+  syncInterval    Int       @default(360)  // minutos
+  lastSyncAt      DateTime?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  syncLogs        FacebookAdsSyncLog[]
+
+  @@map("facebook_ads_config")
+}
+
+// Dados de campanhas importados da Marketing API
+model FacebookAdsCampaignData {
+  id            String   @id @default(cuid())
+
+  // Identificadores do Facebook
+  campaignId    String
+  campaignName  String
+  adSetId       String?
+  adSetName     String?
+
+  // Período do dado (granularidade diária)
+  dateStart     DateTime
+  dateEnd       DateTime
+
+  // Métricas vindas do Facebook
+  impressions   Int      @default(0)
+  clicks        Int      @default(0)
+  spend         Float    @default(0)   // em BRL
+  reach         Int      @default(0)
+  cpc           Float    @default(0)
+  cpm           Float    @default(0)
+  ctr           Float    @default(0)
+
+  // Métricas cruzadas calculadas com a tabela Order
+  purchases     Int      @default(0)
+  revenue       Float    @default(0)  // em BRL
+  roas          Float    @default(0)  // revenue / spend
+  cpa           Float    @default(0)  // spend / purchases
+
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([campaignId, dateStart, dateEnd])
+  @@index([dateStart, dateEnd])
+  @@index([campaignName])
+  @@map("facebook_ads_campaign_data")
+}
+
+// Histórico de syncs
+model FacebookAdsSyncLog {
+  id           String   @id @default(cuid())
+  configId     String
+  config       FacebookAdsConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  status       String   // "success" | "error" | "partial"
+  campaigns    Int      @default(0)
+  dateRange    String?  // "2026-03-01 - 2026-03-11"
+  errorMessage String?
+  duration     Int?     // ms
+
+  createdAt    DateTime @default(now())
+
+  @@index([configId])
+  @@index([status])
+  @@map("facebook_ads_sync_log")
+}

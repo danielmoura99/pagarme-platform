@@ -6,7 +6,8 @@
       "WebFetch(domain:appstore.rdstation.com)",
       "Bash(du -sh /e/pagarme-platform/*)",
       "Bash(grep -E '\\\\.\\(ts|tsx\\)$')",
-      "Bash(npx tsc --noEmit)"
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx prisma:*)"
     ],
     "deny": [],
     "ask": []
