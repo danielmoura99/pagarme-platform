@@ -159,7 +159,8 @@ export async function fetchCampaignInsights(
 
   // Paginar resultados
   while (url) {
-    const res = await fetch(url);
+    const currentUrl: string = url;
+    const res = await fetch(currentUrl);
     const data = await res.json();
     if (data.error) {
       throw new Error(`[META_INSIGHTS] ${data.error.message}`);
