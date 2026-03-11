@@ -1,7 +1,6 @@
 // app/api/integrations/facebook-ads/config/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { tokenIsExpired } from "@/lib/facebook-ads";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +15,6 @@ export async function GET() {
         adAccountId: null,
         adAccountName: null,
         lastSyncAt: null,
-        tokenExpiresAt: null,
         tokenExpired: false,
       });
     }
@@ -27,8 +25,7 @@ export async function GET() {
       adAccountId: config.adAccountId,
       adAccountName: config.adAccountName,
       lastSyncAt: config.lastSyncAt,
-      tokenExpiresAt: config.tokenExpiresAt,
-      tokenExpired: tokenIsExpired(config.tokenExpiresAt),
+      tokenExpired: false,
       autoSync: config.autoSync,
       syncInterval: config.syncInterval,
     });
@@ -41,11 +38,27 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { adAccountId, adAccountName, autoSync, syncInterval } = body;
+    const { accessToken, adAccountId, adAccountName, autoSync, syncInterval } = body;
 
     const existing = await prisma.facebookAdsConfig.findFirst();
+
+    if (accessToken) {
+      if (existing) {
+        await prisma.facebookAdsConfig.update({
+          where: { id: existing.id },
+          data: { accessToken, enabled: true, tokenExpiresAt: null },
+        });
+      } else {
+        await prisma.facebookAdsConfig.create({
+          data: { accessToken, enabled: true },
+        });
+      }
+      console.log("[FB_ADS_CONFIG] System User Token salvo.");
+      return NextResponse.json({ success: true });
+    }
+
     if (!existing) {
-      return NextResponse.json({ error: "Nenhuma configuração encontrada. Conecte primeiro." }, { status: 400 });
+      return NextResponse.json({ error: "Salve o token primeiro." }, { status: 400 });
     }
 
     const updated = await prisma.facebookAdsConfig.update({

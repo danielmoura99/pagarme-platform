@@ -1,7 +1,7 @@
 // app/api/integrations/facebook-ads/accounts/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { fetchAdAccounts, tokenIsExpired } from "@/lib/facebook-ads";
+import { fetchAdAccounts } from "@/lib/facebook-ads";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: "Não conectado ao Facebook Ads" }, { status: 401 });
     }
 
-    if (tokenIsExpired(config.tokenExpiresAt)) {
-      return NextResponse.json({ error: "Token expirado. Reconecte sua conta." }, { status: 401 });
-    }
-
     const accounts = await fetchAdAccounts(config.accessToken);
-
-    // Filtrar apenas contas ativas (account_status = 1)
     const active = accounts.filter((a) => a.account_status === 1);
 
     return NextResponse.json({ accounts: active });
