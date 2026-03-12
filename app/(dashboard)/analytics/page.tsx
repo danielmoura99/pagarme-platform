@@ -15,6 +15,7 @@ import { BarChart3, Calendar, X } from "lucide-react";
 import { PixelAnalytics } from "./_components/pixel-analytics";
 import { EventsList } from "./_components/event-list";
 import { TrafficSources } from "./_components/traffic-sources";
+import { PaidMedia } from "./_components/paid-media";
 
 // Componente de loading para os cards
 function AnalyticsCardSkeleton() {
@@ -181,6 +182,14 @@ export default function PixelAnalyticsPage() {
             <PixelAnalytics fromDate={fromDate} toDate={toDate} />
           </div>
         </Suspense>
+
+        {/* Performance de Mídia Paga */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-4">Performance de Mídia Paga</h2>
+          <Suspense fallback={<ChartSkeleton />}>
+            <PaidMedia fromDate={fromDate} toDate={toDate} />
+          </Suspense>
+        </div>
 
         {/* Análise de Tráfego */}
         <div className="mb-6">

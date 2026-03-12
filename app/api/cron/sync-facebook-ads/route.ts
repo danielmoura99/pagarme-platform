@@ -1,4 +1,5 @@
-// app/api/integrations/facebook-ads/sync/route.ts
+// app/api/cron/sync-facebook-ads/route.ts
+// Chamado pelo Vercel Cron Jobs (vercel.json) a cada 6 horas
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
@@ -9,30 +10,52 @@ import {
 } from "@/lib/facebook-ads";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // segundos (Vercel Pro/Hobby limit)
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
+  // Validar CRON_SECRET para evitar chamadas não autorizadas
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const startMs = Date.now();
   let configId = "";
 
   try {
-    const body = await request.json().catch(() => ({}));
-    const today = new Date().toISOString().split("T")[0];
-    const dateFrom: string = body.dateFrom || (() => {
-      const d = new Date();
-      d.setDate(d.getDate() - 30);
-      return d.toISOString().split("T")[0];
-    })();
-    const dateTo: string = body.dateTo || today;
-
     const config = await prisma.facebookAdsConfig.findFirst();
-    if (!config?.accessToken) {
-      return NextResponse.json({ error: "Não conectado ao Facebook Ads" }, { status: 401 });
+
+    // Sem config ou desabilitado: sair silenciosamente
+    if (!config?.accessToken || !config.enabled) {
+      return NextResponse.json({ skipped: true, reason: "not configured or disabled" });
     }
+
     if (!config.adAccountId) {
-      return NextResponse.json({ error: "Nenhuma conta de anúncio selecionada" }, { status: 400 });
+      return NextResponse.json({ skipped: true, reason: "no ad account selected" });
     }
+
     if (tokenIsExpired(config.tokenExpiresAt)) {
-      return NextResponse.json({ error: "Token expirado. Reconecte sua conta." }, { status: 401 });
+      console.warn("[FB_ADS_CRON] Token expirado — sync cancelado");
+      return NextResponse.json({ skipped: true, reason: "token expired" });
+    }
+
+    // Verificar se autoSync está ativado
+    if (!config.autoSync) {
+      return NextResponse.json({ skipped: true, reason: "autoSync disabled" });
+    }
+
+    // Verificar se já sincronizou recentemente (dentro do intervalo configurado)
+    if (config.lastSyncAt) {
+      const intervalMs = (config.syncInterval || 360) * 60 * 1000;
+      const timeSinceSync = Date.now() - new Date(config.lastSyncAt).getTime();
+      if (timeSinceSync < intervalMs) {
+        return NextResponse.json({
+          skipped: true,
+          reason: `synced ${Math.round(timeSinceSync / 60000)}min ago, interval is ${config.syncInterval}min`,
+        });
+      }
     }
 
     configId = config.id;
@@ -40,28 +63,42 @@ export async function POST(request: Request) {
 
     // Refresh preventivo se expira em < 7 dias
     if (tokenNeedsRefresh(config.tokenExpiresAt)) {
-      console.log("[FB_ADS_SYNC] Token próximo do vencimento, renovando...");
-      const refreshed = await refreshLongLivedToken(accessToken);
-      accessToken = refreshed.accessToken;
-      await prisma.facebookAdsConfig.update({
-        where: { id: config.id },
-        data: { accessToken, tokenExpiresAt: refreshed.expiresAt },
-      });
+      console.log("[FB_ADS_CRON] Token próximo do vencimento, renovando...");
+      try {
+        const refreshed = await refreshLongLivedToken(accessToken);
+        accessToken = refreshed.accessToken;
+        await prisma.facebookAdsConfig.update({
+          where: { id: config.id },
+          data: { accessToken, tokenExpiresAt: refreshed.expiresAt },
+        });
+      } catch (err) {
+        console.warn("[FB_ADS_CRON] Falha ao renovar token:", err);
+        // Continuar com token atual (System User tokens não expiram)
+      }
     }
 
-    console.log(`[FB_ADS_SYNC_START] Período: ${dateFrom} → ${dateTo}`);
+    // Período de sync: últimos 7 dias (para reprocessar dados recentes)
+    const today = new Date().toISOString().split("T")[0];
+    const sevenDaysAgo = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      return d.toISOString().split("T")[0];
+    })();
+
+    console.log(`[FB_ADS_CRON_START] Período: ${sevenDaysAgo} → ${today}`);
+
     const insights = await fetchCampaignInsights(
       accessToken,
       config.adAccountId,
-      dateFrom,
-      dateTo
+      sevenDaysAgo,
+      today
     );
 
-    console.log(`[FB_ADS_SYNC] ${insights.length} registros recebidos da API`);
+    console.log(`[FB_ADS_CRON] ${insights.length} registros recebidos da API`);
 
-    // Limpar dados do período antes de inserir (evita duplicatas por divergência de timezone)
-    const periodStart = new Date(dateFrom + "T00:00:00.000Z");
-    const periodEnd = new Date(dateTo + "T23:59:59.999Z");
+    // Limpar dados do período antes de inserir (evita duplicatas)
+    const periodStart = new Date(sevenDaysAgo + "T00:00:00.000Z");
+    const periodEnd = new Date(today + "T23:59:59.999Z");
 
     const deleted = await prisma.facebookAdsCampaignData.deleteMany({
       where: {
@@ -69,7 +106,7 @@ export async function POST(request: Request) {
         dateEnd: { lte: periodEnd },
       },
     });
-    console.log(`[FB_ADS_SYNC] ${deleted.count} registros antigos removidos do período`);
+    console.log(`[FB_ADS_CRON] ${deleted.count} registros antigos removidos`);
 
     // Agregar insights por campaignId + date (API pode retornar múltiplas linhas por ad set)
     const aggregated = new Map<string, {
@@ -105,16 +142,12 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`[FB_ADS_SYNC] ${aggregated.size} campanhas únicas após agregação`);
-
-    // Inserir dados frescos cruzando com Orders
     let insertCount = 0;
     for (const agg of aggregated.values()) {
       const dateStart = new Date(agg.dateStart + "T00:00:00.000Z");
       const dateEnd = new Date(agg.dateStop + "T00:00:00.000Z");
       const spend = agg.spend;
 
-      // Buscar compras atribuídas à campanha (via utmCampaign)
       const dayEnd = new Date(agg.dateStop + "T23:59:59.999Z");
       const orders = await prisma.order.findMany({
         where: {
@@ -126,7 +159,7 @@ export async function POST(request: Request) {
       });
 
       const purchases = orders.length;
-      const revenue = orders.reduce((sum, o) => sum + o.amount, 0) / 100; // centavos → BRL
+      const revenue = orders.reduce((sum, o) => sum + o.amount, 0) / 100;
       const roas = spend > 0 ? revenue / spend : 0;
       const cpa = purchases > 0 ? spend / purchases : 0;
       const cpc = agg.clicks > 0 ? spend / agg.clicks : 0;
@@ -156,6 +189,7 @@ export async function POST(request: Request) {
     }
 
     const duration = Date.now() - startMs;
+
     await prisma.facebookAdsConfig.update({
       where: { id: config.id },
       data: { lastSyncAt: new Date() },
@@ -166,28 +200,30 @@ export async function POST(request: Request) {
         configId: config.id,
         status: "success",
         campaigns: insertCount,
-        dateRange: `${dateFrom} - ${dateTo}`,
+        dateRange: `${sevenDaysAgo} - ${today}`,
         duration,
       },
     });
 
-    console.log(`[FB_ADS_SYNC_SUCCESS] ${insertCount} campanhas em ${duration}ms`);
+    console.log(`[FB_ADS_CRON_SUCCESS] ${insertCount} campanhas em ${duration}ms`);
     return NextResponse.json({ success: true, campaigns: insertCount, duration });
   } catch (error) {
     const duration = Date.now() - startMs;
     const msg = error instanceof Error ? error.message : "Erro desconhecido";
-    console.error("[FB_ADS_SYNC_ERROR]", msg);
+    console.error("[FB_ADS_CRON_ERROR]", msg);
 
     if (configId) {
-      await prisma.facebookAdsSyncLog.create({
-        data: {
-          configId,
-          status: "error",
-          campaigns: 0,
-          errorMessage: msg,
-          duration,
-        },
-      }).catch(() => {});
+      await prisma.facebookAdsSyncLog
+        .create({
+          data: {
+            configId,
+            status: "error",
+            campaigns: 0,
+            errorMessage: msg,
+            duration,
+          },
+        })
+        .catch(() => {});
     }
 
     return NextResponse.json({ error: msg }, { status: 500 });
