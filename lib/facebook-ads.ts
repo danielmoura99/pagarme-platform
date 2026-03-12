@@ -198,6 +198,6 @@ export function tokenNeedsRefresh(expiresAt: Date | null): boolean {
 }
 
 export function tokenIsExpired(expiresAt: Date | null): boolean {
-  if (!expiresAt) return true;
+  if (!expiresAt) return false; // null = System User token (never expires)
   return expiresAt.getTime() < Date.now();
 }
