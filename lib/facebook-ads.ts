@@ -8,6 +8,21 @@ const APP_ID = process.env.META_APP_ID!;
 const APP_SECRET = process.env.META_APP_SECRET!;
 const REDIRECT_URI = process.env.META_REDIRECT_URI!;
 
+// ─── Validar token (verifica se é real antes de salvar) ──────────────────────
+
+export async function validateToken(accessToken: string): Promise<{ valid: boolean; name?: string; id?: string; error?: string }> {
+  try {
+    const res = await fetch(`${META_API_BASE}/me?fields=id,name&access_token=${accessToken}`);
+    const data = await res.json();
+    if (data.error) {
+      return { valid: false, error: data.error.message };
+    }
+    return { valid: true, id: data.id, name: data.name };
+  } catch {
+    return { valid: false, error: "Falha ao conectar com a API do Facebook" };
+  }
+}
+
 // ─── OAuth URLs ───────────────────────────────────────────────────────────────
 
 export function getOAuthUrl(state: string): string {

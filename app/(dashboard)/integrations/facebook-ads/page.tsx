@@ -97,9 +97,9 @@ export default function FacebookAdsPage() {
         body: JSON.stringify({ accessToken: tokenInput.trim() }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (!res.ok || data.error) throw new Error(data.error || "Erro ao salvar token");
       setTokenInput("");
-      setMessage({ type: "success", text: "Token salvo! Agora selecione a conta de anúncios." });
+      setMessage({ type: "success", text: `Conectado! ${data.user ? `Usuário: ${data.user}` : ""} Selecione a conta de anúncios.` });
       fetchConfig();
     } catch (e) {
       setMessage({ type: "error", text: e instanceof Error ? e.message : "Erro ao salvar token" });

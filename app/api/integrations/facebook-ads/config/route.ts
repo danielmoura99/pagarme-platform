@@ -1,6 +1,7 @@
 // app/api/integrations/facebook-ads/config/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { validateToken } from "@/lib/facebook-ads";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,19 @@ export async function POST(request: Request) {
 
     const existing = await prisma.facebookAdsConfig.findFirst();
 
+    // Salvar System User Token — valida na API antes de salvar
     if (accessToken) {
+      const validation = await validateToken(accessToken);
+      if (!validation.valid) {
+        console.warn("[FB_ADS_CONFIG] Token inválido:", validation.error);
+        return NextResponse.json(
+          { error: `Token inválido: ${validation.error}` },
+          { status: 400 }
+        );
+      }
+
+      console.log("[FB_ADS_CONFIG] Token válido para:", validation.name, `(${validation.id})`);
+
       if (existing) {
         await prisma.facebookAdsConfig.update({
           where: { id: existing.id },
@@ -53,10 +66,11 @@ export async function POST(request: Request) {
           data: { accessToken, enabled: true },
         });
       }
-      console.log("[FB_ADS_CONFIG] System User Token salvo.");
-      return NextResponse.json({ success: true });
+
+      return NextResponse.json({ success: true, user: validation.name });
     }
 
+    // Atualizar outros campos (conta de anúncios, configurações de sync)
     if (!existing) {
       return NextResponse.json({ error: "Salve o token primeiro." }, { status: 400 });
     }
