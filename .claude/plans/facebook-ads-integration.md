@@ -1,8 +1,8 @@
 # Integração Facebook Ads (Meta Marketing API)
 
-> **Status:** EM ANDAMENTO — Fases 1, 2, 3 e 4 concluídas
+> **Status:** CONCLUÍDA — Todas as 7 fases implementadas e validadas
 > **Criado em:** 2026-03-11
-> **Última atualização:** 2026-03-11
+> **Última atualização:** 2026-03-12
 > **Objetivo:** Conectar conta de anúncios do Facebook/Meta para importar dados de campanhas (spend, impressões, cliques) e cruzar com dados de receita (Order) para calcular ROAS, CPA e CPL.
 
 ---
@@ -10,29 +10,31 @@
 ## Visão Geral
 
 ```
-┌─────────────────┐     OAuth     ┌──────────────────┐
-│  Dashboard UI   │ ◄───────────► │  Meta Graph API  │
-│  (Integrations) │               │  Marketing API   │
+┌─────────────────┐  System User  ┌──────────────────┐
+│  Dashboard UI   │  Token (API)  │  Meta Graph API  │
+│  (Integrations) │ ◄───────────► │  Marketing API   │
 └────────┬────────┘               └──────────────────┘
          │                                 │
          ▼                                 ▼
 ┌─────────────────┐               ┌──────────────────┐
-│  FacebookAds    │  Sync diário  │  Dados importados│
+│  FacebookAds    │  Sync manual  │  Dados importados│
 │  Config (DB)    │ ◄───────────► │  spend, cliques  │
-└─────────────────┘               │  impressões, CPM │
+└─────────────────┘   (botão UI)  │  impressões, CPM │
          │                        └──────────────────┘
          ▼
 ┌─────────────────────────────────────────────────────┐
-│  Analytics Dashboard                                 │
+│  Analytics Dashboard (/analytics)                    │
+│  ┌─────────────────────────────────────────────────┐│
+│  │ Filtro: [Todas as campanhas ▼] [Sincronizar]    ││
+│  └─────────────────────────────────────────────────┘│
 │  ┌───────────┐  ┌────────┐  ┌────────┐  ┌────────┐ │
-│  │   ROAS    │  │  CPA   │  │  CPL   │  │ Lucro  │ │
-│  │ Receita/  │  │ Spend/ │  │ Spend/ │  │Receita-│ │
-│  │  Spend    │  │Compras │  │Checkouts│  │ Spend  │ │
+│  │ Investido │  │  ROAS  │  │  CPA   │  │ Lucro  │ │
+│  │ R$1.200   │  │  3.2x  │  │ R$45   │  │R$2.640 │ │
 │  └───────────┘  └────────┘  └────────┘  └────────┘ │
-│                                                      │
 │  ┌──────────────────────────────────────────────────┐│
-│  │ Tabela: Campanha | Spend | Cliques | Compras |   ││
-│  │         Receita | ROAS | CPA                     ││
+│  │ Campanha      │ Spend │ Cliques │ Compras │ ROAS ││
+│  │ Venda Flash   │ R$500 │   320   │    8    │ 4.2x ││
+│  │ Remarketing   │ R$300 │   180   │    5    │ 3.1x ││
 │  └──────────────────────────────────────────────────┘│
 └──────────────────────────────────────────────────────┘
 ```
@@ -41,23 +43,14 @@
 
 ## Pré-requisitos Meta
 
-Antes de codar, é necessário:
-
-1. **Criar App no Meta for Developers** (https://developers.facebook.com)
-   - Tipo: Business
-   - Adicionar produto "Marketing API"
-2. **Permissões necessárias:**
-   - `ads_read` — ler dados de campanhas, ad sets, ads e insights
-   - `ads_management` — (opcional, só se quiser pausar/ativar campanhas)
-   - `business_management` — acessar contas de anúncio do Business Manager
-3. **App Review:**
-   - Para produção, a Meta exige revisão do app para conceder `ads_read`
-   - Em modo dev, funciona com usuários adicionados como testers
-4. **Variáveis de ambiente:**
+1. **App criado no Meta for Developers** — tipo Business, com produto "Marketing API"
+2. **System User criado no Business Manager** — com acesso à conta de anúncios (permissão Analista)
+3. **Token de System User gerado** — com scope `ads_read`, nunca expira
+4. **Variáveis de ambiente configuradas:**
    ```
-   META_APP_ID=xxxxx
-   META_APP_SECRET=xxxxx
-   META_REDIRECT_URI=https://seudominio.com/api/integrations/facebook-ads/callback
+   META_APP_ID=950078520842133
+   META_APP_SECRET=b889c53d7d8e5bad9df55ebb7406e289
+   META_REDIRECT_URI=https://checkout.tradershouse.com.br/api/integrations/facebook-ads/callback
    ```
 
 ---
@@ -65,411 +58,220 @@ Antes de codar, é necessário:
 ## FASE 1: Schema do Banco de Dados
 **Status:** [x] CONCLUÍDA — migration `20260311152312_add_facebook_ads_integration` aplicada
 
-### Modelos Prisma
+### Modelos criados em `prisma/schema.prisma`
 
-```prisma
-model FacebookAdsConfig {
-  id              String    @id @default(cuid())
-  enabled         Boolean   @default(false)
-
-  // OAuth
-  appId           String?
-  appSecret       String?
-  accessToken     String?   @db.Text
-  tokenExpiresAt  DateTime?
-
-  // Conta de anúncios selecionada
-  adAccountId     String?   // formato: act_XXXXXXX
-  adAccountName   String?
-
-  // Sync config
-  autoSync        Boolean   @default(true)
-  syncInterval    Int       @default(360)   // minutos (6h padrão)
-  lastSyncAt      DateTime?
-
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-}
-
-model FacebookAdsCampaignData {
-  id              String    @id @default(cuid())
-
-  // Identificadores da campanha
-  campaignId      String    // ID do Facebook
-  campaignName    String
-  adSetId         String?
-  adSetName       String?
-  adId            String?
-  adName          String?
-
-  // Período do dado
-  dateStart       DateTime
-  dateEnd         DateTime
-
-  // Métricas do Facebook
-  impressions     Int       @default(0)
-  clicks          Int       @default(0)
-  spend           Float     @default(0)    // em BRL
-  reach           Int       @default(0)
-  cpc             Float     @default(0)
-  cpm             Float     @default(0)
-  ctr             Float     @default(0)
-
-  // Métricas cruzadas (calculadas no sync com Order)
-  purchases       Int       @default(0)
-  revenue         Float     @default(0)    // em BRL (da tabela Order)
-  roas            Float     @default(0)    // revenue / spend
-  cpa             Float     @default(0)    // spend / purchases
-
-  // Controle
-  syncedAt        DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@unique([campaignId, dateStart, dateEnd])
-  @@index([dateStart, dateEnd])
-  @@index([campaignName])
-}
-
-model FacebookAdsSyncLog {
-  id          String   @id @default(cuid())
-  status      String   // "success" | "error" | "partial"
-  campaigns   Int      @default(0)  // qtd de campanhas sincronizadas
-  dateRange   String?  // "2026-03-01 - 2026-03-11"
-  errorMessage String?
-  duration    Int?     // ms
-  createdAt   DateTime @default(now())
-}
-```
-
-### Tarefas
-- [ ] Adicionar modelos ao `schema.prisma`
-- [ ] Criar migration: `npx prisma migrate dev --name add_facebook_ads_integration`
-- [ ] Gerar cliente: `npx prisma generate`
+- `FacebookAdsConfig` — configuração da integração (token, conta, sync settings)
+- `FacebookAdsCampaignData` — dados de campanhas importados (@@unique: campaignId + dateStart + dateEnd)
+- `FacebookAdsSyncLog` — histórico de sincronizações (configId como FK)
 
 ---
 
-## FASE 2: OAuth Flow (Conectar Conta)
-**Status:** [x] CONCLUÍDA — rotas criadas em `/app/api/integrations/facebook-ads/`
+## FASE 2: Conexão via System User Token
+**Status:** [x] CONCLUÍDA — abordagem simplificada (sem OAuth redirect)
 
-### Endpoints
+### Decisão: System User Token vs OAuth
+
+Optamos por **System User Token** em vez de OAuth flow porque:
+- Token **nunca expira** (não precisa de refresh)
+- **Sem redirect** (não precisa de App Review para `ads_read`)
+- Mais simples para single-account use case
+
+### Endpoints implementados
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| POST | `/api/integrations/facebook-ads/connect` | Gera URL de autorização e redireciona |
-| GET | `/api/integrations/facebook-ads/callback` | Recebe code, troca por token |
-| GET | `/api/integrations/facebook-ads/config` | Retorna configuração atual |
-| POST | `/api/integrations/facebook-ads/config` | Salva configuração |
-| POST | `/api/integrations/facebook-ads/disconnect` | Remove tokens e desativa |
-| GET | `/api/integrations/facebook-ads/accounts` | Lista contas de anúncio disponíveis |
+| GET | `/api/integrations/facebook-ads/config` | Retorna status da conexão |
+| POST | `/api/integrations/facebook-ads/config` | Salva token (com validação via API) ou atualiza config |
+| GET | `/api/integrations/facebook-ads/accounts` | Lista contas de anúncio (filtra status 1 e 101) |
+| POST | `/api/integrations/facebook-ads/disconnect` | Remove token e desativa |
+| GET | `/api/integrations/facebook-ads/sync-logs` | Histórico de syncs |
 
-### Fluxo OAuth
+### Validação de token
 
-```
-1. Usuário clica "Conectar Facebook Ads"
-   → Frontend chama POST /connect
-   → Backend retorna URL: https://www.facebook.com/v21.0/dialog/oauth
-       ?client_id={APP_ID}
-       &redirect_uri={CALLBACK_URL}
-       &scope=ads_read
-       &state={csrf_token}
+Ao salvar o token, o backend chama `GET /me?fields=id,name` na API do Facebook para verificar se é válido antes de persistir. Tokens inválidos são rejeitados com erro 400.
 
-2. Usuário autoriza no Facebook
-   → Redirect para /callback?code=XXX
+### Lib: `lib/facebook-ads.ts`
 
-3. Backend troca code por token:
-   POST https://graph.facebook.com/v21.0/oauth/access_token
-   {
-     client_id, client_secret, redirect_uri, code
-   }
-   → Recebe: access_token (short-lived, 1h)
-
-4. Backend troca por long-lived token (60 dias):
-   GET https://graph.facebook.com/v21.0/oauth/access_token
-     ?grant_type=fb_exchange_token
-     &client_id={APP_ID}
-     &client_secret={APP_SECRET}
-     &fb_exchange_token={SHORT_TOKEN}
-   → Recebe: access_token (long-lived, ~60 dias)
-
-5. Salva token no FacebookAdsConfig
-
-6. Busca contas de anúncio:
-   GET https://graph.facebook.com/v21.0/me/adaccounts
-     ?fields=id,name,currency,account_status
-   → Retorna lista para o usuário selecionar
-```
-
-### Tarefas
-- [ ] Criar route `connect/route.ts` — gera URL OAuth
-- [ ] Criar route `callback/route.ts` — troca code por token (short → long-lived)
-- [ ] Criar route `config/route.ts` (GET/POST) — CRUD configuração
-- [ ] Criar route `disconnect/route.ts` — limpa tokens
-- [ ] Criar route `accounts/route.ts` — lista ad accounts do usuário
-- [ ] Adicionar variáveis ao `.env.example`
+Client para Meta Marketing API v21.0 com:
+- `validateToken()` — verifica token contra API antes de salvar
+- `fetchAdAccounts()` — lista contas de anúncio
+- `fetchCampaignInsights()` — busca insights com paginação
+- `tokenIsExpired()` — retorna `false` para `null` (System User tokens não expiram)
+- `tokenNeedsRefresh()` — verifica se token OAuth expira em < 7 dias (fallback)
+- Funções OAuth mantidas como fallback: `getOAuthUrl()`, `exchangeCodeForToken()`, `refreshLongLivedToken()`
 
 ---
 
 ## FASE 3: Sync de Dados (Marketing API)
-**Status:** [x] CONCLUÍDA — `sync/route.ts` com upsert e cruzamento Order ↔ Campaign
+**Status:** [x] CONCLUÍDA — strategy "delete + insert" com agregação por campanha
 
-### Endpoint de Sync
+### Endpoint
 
 ```
 POST /api/integrations/facebook-ads/sync
-Body: { dateFrom?: string, dateTo?: string }
+Body: { dateFrom?: string, dateTo?: string }  // default: últimos 30 dias
 ```
 
-### Lógica de Sync
+### Lógica de Sync (v2 — corrigida)
 
-```typescript
-// 1. Buscar insights de campanhas
-GET https://graph.facebook.com/v21.0/{ad_account_id}/insights
-  ?fields=campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,
-          impressions,clicks,spend,reach,cpc,cpm,ctr
-  &time_range={"since":"2026-03-01","until":"2026-03-11"}
-  &level=campaign          // ou adset, ad
-  &time_increment=1        // granularidade diária
-  &limit=500
+1. **Busca insights** da API do Facebook (level: adset, time_increment: 1)
+2. **Agrega por `campaignId + date`** — API retorna múltiplas linhas por ad set, soma impressions/clicks/spend/reach
+3. **Deleta dados existentes** do período (strategy "replace" — evita duplicatas por divergência de timezone)
+4. **Insere dados frescos** com datas UTC explícitas (`T00:00:00.000Z`)
+5. **Cruza com Orders** — busca pedidos `paid` com `utmCampaign = campaignName` no mesmo dia
+6. **Calcula métricas**: ROAS, CPA, CPC, CPM, CTR
+7. **Registra log** em `FacebookAdsSyncLog`
 
-// 2. Para cada campanha, cruzar com Order
-//    Buscar Orders com utmCampaign que bate com campaign_name
-//    (ou utm_campaign configurado nos anúncios)
-SELECT COUNT(*) as purchases, SUM(amount) as revenue
-FROM "Order"
-WHERE status = 'paid'
-  AND "utmSource" IN ('facebook', 'fb', 'ig', 'instagram')
-  AND "utmCampaign" = {campaign_name}
-  AND "createdAt" BETWEEN {date_start} AND {date_end}
+### Bugs corrigidos
 
-// 3. Calcular métricas cruzadas
-ROAS = revenue / spend
-CPA  = spend / purchases
-CPL  = spend / initiateCheckouts (da PixelEventLog)
-
-// 4. Upsert no FacebookAdsCampaignData
-```
-
-### Token Refresh
-
-O long-lived token dura ~60 dias. Estratégia:
-- Antes de cada sync, verificar `tokenExpiresAt`
-- Se expira em < 7 dias, tentar refresh:
-  ```
-  GET https://graph.facebook.com/v21.0/oauth/access_token
-    ?grant_type=fb_exchange_token
-    &client_id={APP_ID}
-    &client_secret={APP_SECRET}
-    &fb_exchange_token={CURRENT_TOKEN}
-  ```
-- Se token expirou, notificar usuário para reconectar
-
-### Tarefas
-- [ ] Criar lib `lib/facebook-ads.ts` — client com helpers (fetchInsights, refreshToken, etc.)
-- [ ] Criar route `sync/route.ts` — sync manual
-- [ ] Implementar lógica de cruzamento Order ↔ Campaign
-- [ ] Implementar token refresh preventivo
-- [ ] Criar route `sync-logs/route.ts` — histórico de syncs
+- **Token expirado para System User**: `tokenIsExpired(null)` retornava `true` — corrigido para `false`
+- **Duplicatas no sync**: upsert falhava por divergência de timezone local vs UTC — resolvido com strategy "delete + insert" + datas UTC
+- **Unique constraint violation**: API retorna múltiplas linhas por ad set para mesma campanha/dia — resolvido com agregação prévia via Map
 
 ---
 
 ## FASE 4: Dashboard de Configuração
-**Status:** [x] CONCLUÍDA — página em `/app/(dashboard)/integrations/facebook-ads/page.tsx`
+**Status:** [x] CONCLUÍDA — `/app/(dashboard)/integrations/facebook-ads/page.tsx`
 
-### Página: `/integrations/facebook-ads`
+### Funcionalidades
 
-```
-┌──────────────────────────────────────────────────────┐
-│ Facebook Ads Integration                              │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│ Status: 🟢 Conectado (ou 🔴 Desconectado)           │
-│ Conta: Minha Empresa (act_12345678)                  │
-│ Último sync: 11/03/2026 às 08:00                    │
-│ Token expira: 10/05/2026                             │
-│                                                      │
-│ [Sincronizar Agora]  [Desconectar]                   │
-│                                                      │
-│ ── Configurações ──                                  │
-│ ☑ Sync automático a cada [6] horas                  │
-│ ☑ Incluir Ad Sets                                    │
-│ ☐ Incluir Ads individuais                            │
-│                                                      │
-│ ── Histórico de Sync ──                              │
-│ ┌──────────┬──────────┬───────────┬────────────────┐ │
-│ │ Data     │ Status   │ Campanhas │ Duração        │ │
-│ ├──────────┼──────────┼───────────┼────────────────┤ │
-│ │ 11/03    │ ✅ Ok    │ 12        │ 2.3s           │ │
-│ │ 10/03    │ ✅ Ok    │ 12        │ 1.8s           │ │
-│ │ 10/03    │ ❌ Erro  │ 0         │ Token expirado │ │
-│ └──────────┴──────────┴───────────┴────────────────┘ │
-└──────────────────────────────────────────────────────┘
-```
-
-### Tarefas
-- [ ] Criar página `app/(dashboard)/integrations/facebook-ads/page.tsx`
-- [ ] Componente de status da conexão
-- [ ] Seletor de conta de anúncio (após OAuth)
-- [ ] Botão de sync manual com feedback
-- [ ] Tabela de sync logs
-- [ ] Configurações de sync (intervalo, granularidade)
+- Input de System User Token com instruções passo-a-passo
+- Validação do token antes de salvar (mostra nome do usuário conectado)
+- Seletor de conta de anúncio (dropdown com nome, ID e currency)
+- Botão "Sincronizar Agora" com feedback
+- Botão "Desconectar" com confirmação
+- Tabela de histórico de syncs (data, status, campanhas, duração)
 
 ---
 
 ## FASE 5: Dashboard Analytics — Visão de Mídia Paga
-**Status:** [ ] Pendente
-
-### Novo componente na página `/analytics`
-
-Adicionar seção "Performance de Mídia Paga" entre os cards de resumo e a análise de tráfego.
-
-```
-┌──────────────────────────────────────────────────────┐
-│ Performance de Mídia Paga (Facebook Ads)              │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│ │  Spend   │ │  ROAS    │ │   CPA    │ │  Lucro   │ │
-│ │ R$1.200  │ │  3.2x    │ │ R$45,00  │ │ R$2.640  │ │
-│ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
-│                                                      │
-│ Campanha        │ Spend  │ Cliques │ Compras │ ROAS  │
-│ ─────────────────────────────────────────────────── │
-│ Venda Flash     │ R$500  │   320   │    8    │ 4.2x  │
-│ Remarketing     │ R$300  │   180   │    5    │ 3.1x  │
-│ Lookalike       │ R$400  │   250   │    3    │ 1.8x  │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-```
+**Status:** [x] CONCLUÍDA — componente `paid-media.tsx` na página `/analytics`
 
 ### API
 
 ```
-GET /api/analytics/paid-media?from=2026-03-01&to=2026-03-11
+GET /api/analytics/paid-media?from=2026-03-01&to=2026-03-12
 ```
 
-Retorna dados agregados do `FacebookAdsCampaignData` + cálculos.
+Retorna dados agregados por campanha do `FacebookAdsCampaignData` com totais recalculados.
 
-### Tarefas
-- [ ] Criar route `api/analytics/paid-media/route.ts`
-- [ ] Criar componente `analytics/_components/paid-media.tsx`
-- [ ] Cards de resumo: Total Spend, ROAS médio, CPA médio, Lucro
-- [ ] Tabela de campanhas com métricas cruzadas
-- [ ] Integrar filtro de data existente (fromDate/toDate)
-- [ ] Adicionar na page.tsx do analytics
+### Componente: `analytics/_components/paid-media.tsx`
+
+**Filtro multi-campanha:**
+- Dropdown com checkboxes para selecionar uma ou mais campanhas
+- Cada item mostra nome + spend para referência rápida
+- Botões "Todas" e "Limpar" para ações rápidas
+- Tags/badges com as campanhas selecionadas (clicáveis para remover)
+- Cards e tabela atualizam dinamicamente com base na seleção
+
+**4 Cards de resumo** (recalculam com filtro):
+- Total Investido (com cliques e impressões)
+- ROAS (colorido: verde >=3x, amarelo >=1.5x, vermelho abaixo)
+- CPA (com total de compras atribuídas)
+- Lucro Estimado (receita - spend, verde/vermelho)
+
+**Tabela de campanhas:**
+- Colunas: Campanha | Investido | Cliques | Compras | Receita | ROAS (badge) | CPA
+- Mostra "(N de M)" quando filtrada
+
+**Botão "Sincronizar":**
+- Na barra de filtro, à direita
+- Chama `POST /api/integrations/facebook-ads/sync`
+- Loading spinner durante sync
+- Feedback inline (sucesso/erro)
+- Atualiza dados após sync
+
+**Estados especiais:**
+- Não conectado: banner com link para configurar
+- Sem dados no período: banner com botão de sync
+
+### Integração na página `/analytics`
+
+Seção "Performance de Mídia Paga" posicionada entre os cards de resumo (PixelAnalytics) e a análise de tráfego (TrafficSources). Recebe `fromDate` e `toDate` do filtro de período da página.
 
 ---
 
-## FASE 6: Sync Automático (Cron / Scheduled)
-**Status:** [ ] Pendente
+## FASE 6: Sync Manual (botão no Analytics)
+**Status:** [x] CONCLUÍDA — abordagem manual preferida sobre cron automático
 
-### Opções
+### Decisão: Manual vs Automático
 
-**Opção A: Vercel Cron Jobs** (recomendado para produção)
-```json
-// vercel.json
-{
-  "crons": [{
-    "path": "/api/cron/sync-facebook-ads",
-    "schedule": "0 */6 * * *"
-  }]
-}
-```
+Optamos por **sync manual via botão** em vez de cron automático para:
+- Evitar chamadas desnecessárias à API do Facebook
+- Dar controle ao usuário sobre quando sincronizar
+- Simplificar a infraestrutura (sem vercel.json/CRON_SECRET)
 
-**Opção B: Chamada manual via external cron** (alternativa simples)
-- Usar serviço externo (cron-job.org, EasyCron) para chamar o endpoint de sync
+### Implementação
 
-### Tarefas
-- [ ] Criar route `api/cron/sync-facebook-ads/route.ts`
-- [ ] Proteger com `CRON_SECRET` header (Vercel pattern)
-- [ ] Configurar `vercel.json` com schedule
-- [ ] Implementar lógica de retry em caso de falha
-- [ ] Notificação quando token está prestes a expirar
+- Botão "Sincronizar" no componente `PaidMedia` (analytics)
+- Botão "Sincronizar Agora" na página de configuração (`/integrations/facebook-ads`)
+- Endpoint cron (`/api/cron/sync-facebook-ads`) mantido como fallback para uso futuro
 
 ---
 
-## FASE 7: Testes e Validação
-**Status:** [ ] Pendente
+## FASE 7: Validação
+**Status:** [x] CONCLUÍDA — testado em produção
 
-### Checklist de Validação
+### Checklist
 
-- [ ] OAuth flow completo: conectar → selecionar conta → dados aparecem
-- [ ] Sync manual funciona e popula `FacebookAdsCampaignData`
-- [ ] Cruzamento correto: campanha do Facebook → UTM → Order
-- [ ] ROAS calculado corretamente (receita real / spend)
-- [ ] Token refresh funciona antes de expirar
-- [ ] Filtro de data no analytics funciona com dados de mídia paga
-- [ ] Desconectar limpa tokens e para syncs
-- [ ] Erro de token expirado mostra alerta no dashboard
-- [ ] Sync logs registram sucesso e falha
+- [x] Conexão via System User Token: validação → seleção de conta → dados aparecem
+- [x] Token inválido rejeitado com erro específico
+- [x] Sync manual funciona e popula `FacebookAdsCampaignData`
+- [x] Sync não duplica dados (strategy delete + insert + agregação)
+- [x] System User Token funciona sem expiração (tokenIsExpired retorna false para null)
+- [x] Filtro de data no analytics funciona com dados de mídia paga
+- [x] Filtro multi-campanha funciona (cards recalculam)
+- [x] Desconectar limpa tokens
+- [x] Sync logs registram sucesso e falha
+- [x] Build passa sem erros
+
+---
+
+## Arquivos Criados/Modificados
+
+### Novos
+| Arquivo | Descrição |
+|---------|-----------|
+| `lib/facebook-ads.ts` | Client Meta Marketing API v21.0 |
+| `app/api/integrations/facebook-ads/config/route.ts` | GET/POST config |
+| `app/api/integrations/facebook-ads/accounts/route.ts` | Lista ad accounts |
+| `app/api/integrations/facebook-ads/sync/route.ts` | Sync manual |
+| `app/api/integrations/facebook-ads/disconnect/route.ts` | Desconectar |
+| `app/api/integrations/facebook-ads/sync-logs/route.ts` | Histórico |
+| `app/api/analytics/paid-media/route.ts` | API analytics mídia paga |
+| `app/api/cron/sync-facebook-ads/route.ts` | Endpoint cron (fallback) |
+| `app/(dashboard)/integrations/facebook-ads/page.tsx` | Página de config |
+| `app/(dashboard)/analytics/_components/paid-media.tsx` | Componente analytics |
+
+### Modificados
+| Arquivo | Mudança |
+|---------|---------|
+| `prisma/schema.prisma` | +3 models (FacebookAdsConfig, CampaignData, SyncLog) |
+| `app/(dashboard)/analytics/page.tsx` | +import PaidMedia, +seção "Performance de Mídia Paga" |
+| `app/(dashboard)/integrations/page.tsx` | Card Facebook Ads na lista de integrações |
+| `.env` | +META_APP_ID, +META_APP_SECRET, +META_REDIRECT_URI, +CRON_SECRET |
 
 ---
 
 ## Mapeamento UTM ↔ Facebook Campaign
 
-O cruzamento depende de como as campanhas estão configuradas no Facebook Ads Manager:
+O cruzamento de dados depende da configuração de UTMs nos anúncios:
 
 ```
 URL do anúncio no Facebook:
 https://checkout.tradershouse.com.br/checkout?productId=XXX
   &utm_source=facebook
   &utm_medium=cpc
-  &utm_campaign={campaign_name}   ← este é o link
+  &utm_campaign={{campaign.name}}   ← template dinâmico do Facebook
 ```
 
-O `{campaign_name}` no template do Facebook deve bater com o `utmCampaign` salvo na tabela `Order`.
-
-**Importante:** Se o anunciante usa templates dinâmicos do Facebook (`{{campaign.name}}`), o nome da campanha vai automaticamente. Se usa valores manuais, precisam ser consistentes.
-
-### Estratégia de Match
-
-```typescript
-// Prioridade de match:
-// 1. campaign_id do Facebook === utm_content (se configurado)
-// 2. campaign_name do Facebook === utmCampaign do Order
-// 3. Fallback: agrupar por utmSource = 'facebook' sem campaign específico
-```
-
----
-
-## Estimativa de Complexidade por Fase
-
-| Fase | Descrição | Complexidade | Dependência |
-|------|-----------|-------------|-------------|
-| 1 | Schema DB | Baixa | - |
-| 2 | OAuth Flow | Média | Fase 1 + Meta App criado |
-| 3 | Sync de Dados | Alta | Fase 2 |
-| 4 | Dashboard Config | Média | Fase 2 |
-| 5 | Dashboard Analytics | Média | Fase 3 |
-| 6 | Sync Automático | Baixa | Fase 3 |
-| 7 | Testes | Média | Todas |
-
----
-
-## Riscos e Mitigações
-
-| Risco | Impacto | Mitigação |
-|-------|---------|-----------|
-| App Review da Meta demora | Bloqueia produção | Começar review cedo; usar modo dev para testes |
-| Token expira sem refresh | Dados param de atualizar | Alerta no dashboard + email quando token < 7 dias |
-| Campaign name não bate com UTM | ROAS incorreto | Documentar padrão de UTM; UI de mapeamento manual |
-| Rate limit da API (200 calls/hour) | Sync falha | Batch requests; respeitar rate limits; retry com backoff |
-| Mudança na Graph API | Quebra integração | Fixar versão da API (v21.0); monitorar deprecations |
-
----
-
-## Próximos Passos Imediatos
-
-1. **Criar App no Meta for Developers** (ação manual do proprietário)
-2. **Começar Fase 1** — schema do banco
-3. **Começar Fase 2** — OAuth flow (pode testar em modo dev sem App Review)
+O `{{campaign.name}}` é substituído automaticamente pelo nome da campanha no Facebook Ads Manager. Este valor deve bater com o campo `utmCampaign` na tabela `Order`.
 
 ---
 
 ## Referências
 
 - [Meta Marketing API Docs](https://developers.facebook.com/docs/marketing-apis)
-- [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
-- [OAuth Reference](https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow)
 - [Insights API](https://developers.facebook.com/docs/marketing-api/insights)
+- [System Users](https://developers.facebook.com/docs/marketing-api/system-users)
 - Padrão existente: ver integração RD Station em `/app/api/integrations/rd-station/`

@@ -92,6 +92,8 @@ export async function GET(request: Request) {
       splitAmount: order.splitAmount,
       createdAt: order.createdAt.toISOString(),
       pagarmeTransactionId: order.pagarmeTransactionId,
+      utmSource: order.utmSource,
+      utmCampaign: order.utmCampaign,
     }));
 
     // Calcular informações de paginação

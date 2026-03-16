@@ -64,6 +64,8 @@ interface Sale {
   splitAmount: number | null;
   createdAt: string;
   pagarmeTransactionId: string | null;
+  utmSource: string | null;
+  utmCampaign: string | null;
 }
 
 // Tipo para paginação
@@ -334,6 +336,8 @@ export function SalesTable() {
         "Afiliado",
         "Cupom",
         "Comissão",
+        "Fonte",
+        "Campanha",
         "ID Transação",
       ];
 
@@ -382,6 +386,8 @@ export function SalesTable() {
             sale.splitAmount
               ? formatCurrencyForCSV(Math.round(sale.splitAmount * 100))
               : escapeCSV("0,00"),
+            escapeCSV(sale.utmSource || "Orgânico"),
+            escapeCSV(sale.utmCampaign || "-"),
             escapeCSV(sale.pagarmeTransactionId || "N/A"),
           ].join(",");
         }),
@@ -493,6 +499,12 @@ export function SalesTable() {
 
         // Cupom
         cupom: sale.couponCode,
+
+        // Fonte de tráfego
+        fonte: {
+          origem: sale.utmSource || "Orgânico",
+          campanha: sale.utmCampaign || null,
+        },
 
         // ID da transação
         transacaoId: sale.pagarmeTransactionId,
@@ -675,6 +687,7 @@ export function SalesTable() {
                   <TableHead>Valor</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Afiliado</TableHead>
+                  <TableHead>Fonte</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -702,6 +715,9 @@ export function SalesTable() {
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -746,6 +762,7 @@ export function SalesTable() {
                   <TableHead className="font-medium">Status</TableHead>
                   <TableHead className="font-medium">Pagamento</TableHead>
                   <TableHead className="font-medium">Afiliado</TableHead>
+                  <TableHead className="font-medium">Fonte</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -823,6 +840,26 @@ export function SalesTable() {
                       ) : (
                         <div className="text-sm text-muted-foreground">
                           Direto
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {sale.utmSource || sale.utmCampaign ? (
+                        <div className="space-y-0.5">
+                          {sale.utmSource && (
+                            <Badge variant="outline" className="text-xs font-normal">
+                              {sale.utmSource}
+                            </Badge>
+                          )}
+                          {sale.utmCampaign && (
+                            <div className="text-xs text-muted-foreground truncate max-w-[150px]" title={sale.utmCampaign}>
+                              {sale.utmCampaign}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          Orgânico
                         </div>
                       )}
                     </TableCell>
