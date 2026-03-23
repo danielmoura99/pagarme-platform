@@ -35,13 +35,14 @@ export class PixelEventDeduplicator {
     );
 
     // Estratégia 1: Purchase events - usar orderId (mais confiável)
+    // SEM janela de tempo — um Purchase por orderId+pixelConfig é suficiente
+    // (webhook server-side pode criar minutos antes do frontend)
     if (eventType === "Purchase" && orderId) {
       const existing = await prisma.pixelEventLog.findFirst({
         where: {
           pixelConfigId,
           eventType,
           orderId,
-          createdAt: { gte: duplicateCheckWindow },
         },
         orderBy: { createdAt: "desc" },
       });
