@@ -3,6 +3,15 @@
 
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    throw new Error("Não autorizado");
+  }
+}
 
 interface ProductFormValues {
   id?: string;
@@ -21,6 +30,7 @@ interface ProductFormValues {
 export async function getProduct(
   id: string
 ): Promise<ProductFormValues | undefined> {
+  await requireAdmin();
   if (!id) return undefined;
 
   try {
@@ -64,6 +74,7 @@ export async function getProduct(
 }
 
 export async function updateProduct(id: string, data: ProductFormValues) {
+  await requireAdmin();
   try {
     // Primeiro, desativa os preços existentes
     await prisma.price.updateMany({
@@ -110,6 +121,7 @@ export async function updateProduct(id: string, data: ProductFormValues) {
 }
 
 export async function deleteProduct(id: string) {
+  await requireAdmin();
   try {
     await prisma.price.deleteMany({
       where: { productId: id },
@@ -128,6 +140,7 @@ export async function deleteProduct(id: string) {
 }
 
 export async function createProduct(data: ProductFormValues) {
+  await requireAdmin();
   try {
     const product = await prisma.product.create({
       data: {
@@ -160,6 +173,7 @@ export async function createProduct(data: ProductFormValues) {
 }
 
 export async function discontinueProduct(id: string) {
+  await requireAdmin();
   try {
     // Primeiro, busque o produto atual para obter a descrição
     const existingProduct = await prisma.product.findUnique({

@@ -14,7 +14,10 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, req) {
+        console.log("[AUTH_AUTHORIZE] Called with email:", credentials?.email);
+
         if (!credentials?.email || !credentials?.password) {
+          console.log("[AUTH_AUTHORIZE] Missing credentials");
           return null;
         }
 
@@ -25,6 +28,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user?.password) {
+          console.log("[AUTH_AUTHORIZE] User not found or no password");
           return null;
         }
 
@@ -34,8 +38,11 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (!isPasswordValid) {
+          console.log("[AUTH_AUTHORIZE] Invalid password");
           return null;
         }
+
+        console.log("[AUTH_AUTHORIZE] Password valid, creating session...");
 
         // Criar sessão no banco de dados
         const sessionToken = crypto.randomBytes(32).toString("hex");
@@ -147,5 +154,17 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 horas (alinhado com o check de expiração do callback)
+  },
+  cookies: {
+    sessionToken: {
+      name: "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax" as const, // "strict" quebraria redirects OAuth
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      },
+    },
   },
 };

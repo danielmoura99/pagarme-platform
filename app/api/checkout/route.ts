@@ -4,8 +4,47 @@ import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
 import { prisma } from "@/lib/db";
 import { SplitRule } from "@/types/pagarme";
+import { z } from "zod";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+// Schema de validação do checkout
+const checkoutSchema = z.object({
+  product: z.object({
+    id: z.string().min(1),
+    price: z.number().int().positive(),
+  }),
+  customer: z.object({
+    name: z.string().min(2).max(200),
+    email: z.string().email(),
+    document: z.string().min(11).max(14),
+    phone: z.string().min(10).max(20),
+  }),
+  paymentMethod: z.enum(["credit_card", "pix"]),
+  cardData: z.object({
+    cardNumber: z.string().min(13).max(19),
+    cardHolder: z.string().min(2).max(200),
+    cardExpiry: z.string().min(4).max(7),
+    cardCvv: z.string().min(3).max(4),
+  }).optional(),
+  affiliateRef: z.string().optional().nullable(),
+  selectedBumps: z.array(z.string()).optional(),
+  coupon: z.object({
+    code: z.string(),
+    discountPercentage: z.number().optional(),
+  }).optional().nullable(),
+  checkoutId: z.string().uuid().optional(),
+  utmSource: z.string().max(500).optional().nullable(),
+  utmMedium: z.string().max(500).optional().nullable(),
+  utmCampaign: z.string().max(500).optional().nullable(),
+  utmTerm: z.string().max(500).optional().nullable(),
+  utmContent: z.string().max(500).optional().nullable(),
+  referrer: z.string().max(2000).optional().nullable(),
+  landingPage: z.string().max(2000).optional().nullable(),
+  installments: z.number().int().min(1).max(12).optional(),
+  totalAmount: z.number().int().positive().optional(),
+}).passthrough();
 
 // ✅ MAPEAMENTO DE ERROS DA PAGAR.ME PARA MENSAGENS EM PORTUGUÊS
 const ERROR_MESSAGES_MAP: Record<string, string> = {
@@ -131,7 +170,29 @@ function extractAndTranslateValidationErrors(errorResponse: any): {
 
 export async function POST(request: Request) {
   try {
+    // Rate limiting: 10 checkouts por minuto por IP
+    const clientIP = getClientIP(request);
+    const rateLimit = checkRateLimit("checkout", clientIP, 10, 60_000);
+    if (!rateLimit.allowed) {
+      console.warn(`[CHECKOUT_RATE_LIMIT] IP bloqueado: ${clientIP}`);
+      return NextResponse.json(
+        { message: "Muitas tentativas. Aguarde um momento." },
+        { status: 429, headers: { "Retry-After": String(rateLimit.resetIn) } }
+      );
+    }
+
     const body = await request.json();
+
+    // Validação server-side do payload
+    const parsed = checkoutSchema.safeParse(body);
+    if (!parsed.success) {
+      console.error("[CHECKOUT_VALIDATION_ERROR]", parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`));
+      return NextResponse.json(
+        { message: "Dados inválidos", errors: parsed.error.issues.map(i => i.message) },
+        { status: 400 }
+      );
+    }
+
     const {
       product,
       customer,
@@ -141,7 +202,6 @@ export async function POST(request: Request) {
       selectedBumps,
       coupon,
       checkoutId,
-      // UTMs (opcionais — não afetam o fluxo Pagar.me)
       utmSource    = null,
       utmMedium    = null,
       utmCampaign  = null,
@@ -149,7 +209,7 @@ export async function POST(request: Request) {
       utmContent   = null,
       referrer     = null,
       landingPage  = null,
-    } = body;
+    } = parsed.data;
 
     // Verificar se já existe uma transação com este checkoutId
     if (checkoutId) {
@@ -212,18 +272,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log("Recebido request de checkout:", {
-      product,
-      customer,
-      paymentMethod,
-      affiliateRef,
-      couponInfo: coupon
-        ? {
-            code: coupon.code,
-            hasDiscount: !!coupon.discountPercentage,
-          }
-        : null,
-    });
+    console.log("[CHECKOUT] productId:", product.id, "method:", paymentMethod, "coupon:", coupon?.code || "none");
 
     // 1. Validar e buscar produto
     const dbProduct = await prisma.product.findUnique({
@@ -765,7 +814,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Erro interno",
+        message: "Erro interno do servidor",
       },
       { status: 500 }
     );

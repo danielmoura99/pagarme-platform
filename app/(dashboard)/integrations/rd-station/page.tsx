@@ -229,14 +229,14 @@ export default function RDStationPage() {
     // Salvar config primeiro
     await saveConfig();
     
-    // Redirecionar para OAuth do RD Station (URL correta da API v2)
-    const authUrl = new URL('https://api.rd.services/auth/dialog');
-    authUrl.searchParams.set('client_id', config.clientId);
-    authUrl.searchParams.set('redirect_uri', `${window.location.origin}/api/integrations/rd-station/callback`);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('state', 'secure_random_string'); // Em produção, usar valor aleatório seguro
-    
-    window.location.href = authUrl.toString();
+    // Gerar state CSRF seguro via backend e redirecionar para OAuth
+    const connectResponse = await fetch('/api/integrations/rd-station/connect');
+    if (!connectResponse.ok) {
+      toast.error("Erro ao iniciar autenticação");
+      return;
+    }
+    const { url } = await connectResponse.json();
+    window.location.href = url;
   };
 
   const testConnection = async () => {

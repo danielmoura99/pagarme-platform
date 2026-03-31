@@ -3,6 +3,15 @@
 
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    throw new Error("Não autorizado");
+  }
+}
 
 interface CouponFormValues {
   code: string;
@@ -14,6 +23,7 @@ interface CouponFormValues {
 }
 
 export async function createCoupon(data: CouponFormValues) {
+  await requireAdmin();
   try {
     const coupon = await prisma.coupon.create({
       data: {
@@ -38,6 +48,7 @@ export async function createCoupon(data: CouponFormValues) {
 }
 
 export async function updateCoupon(id: string, data: CouponFormValues) {
+  await requireAdmin();
   try {
     const coupon = await prisma.coupon.update({
       where: { id },
@@ -63,6 +74,7 @@ export async function updateCoupon(id: string, data: CouponFormValues) {
 }
 
 export async function deleteCoupon(id: string) {
+  await requireAdmin();
   try {
     const coupon = await prisma.coupon.delete({
       where: { id },
@@ -78,6 +90,7 @@ export async function deleteCoupon(id: string) {
 
 // Função para buscar um cupom específico
 export async function getCoupon(id: string) {
+  await requireAdmin();
   try {
     const coupon = await prisma.coupon.findUnique({
       where: { id },
@@ -102,6 +115,7 @@ export async function getCoupon(id: string) {
 }
 
 export async function inactivateCoupon(id: string) {
+  await requireAdmin();
   try {
     // Em vez de excluir, apenas marcamos como inativo
     const coupon = await prisma.coupon.update({

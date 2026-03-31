@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { exchangeCodeForToken } from "@/lib/facebook-ads";
 import { prisma } from "@/lib/db";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,18 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
     const error = searchParams.get("error");
+
+    // Validar state (CSRF protection)
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("fb_oauth_state")?.value;
+    if (!state || !storedState || state !== storedState) {
+      console.warn("[FB_ADS_CALLBACK_INVALID_STATE]");
+      return NextResponse.redirect(
+        new URL("/integrations/facebook-ads?error=invalid_state", request.url)
+      );
+    }
 
     if (error) {
       console.error("[FB_ADS_CALLBACK_DENIED]", error);

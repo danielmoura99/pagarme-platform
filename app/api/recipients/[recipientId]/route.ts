@@ -1,6 +1,8 @@
 // app/api/recipients/[recipientId]/route.ts
 import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,11 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ recipientId: string }> }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { recipientId } = await params;
     const recipient = await pagarme.getRecipient(recipientId);
@@ -25,6 +32,11 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ recipientId: string }> }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { recipientId } = await params;
     const body = await request.json();
@@ -43,6 +55,11 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ recipientId: string }> }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { recipientId } = await params;
     // No Pagar.me, não excluímos realmente, apenas desativamos

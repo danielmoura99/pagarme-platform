@@ -2,25 +2,48 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
-// import { sendPurchaseToRDStation } from "@/lib/rd-station-auto-sync"; // Removido - sync via pixel event
+import crypto from "crypto";
+
+// Verificar assinatura HMAC do webhook Pagar.me
+function verifyWebhookSignature(body: string, signature: string | null, secret: string): boolean {
+  if (!signature) return false;
+  const expectedSignature = crypto
+    .createHmac("sha1", secret)
+    .update(body)
+    .digest("hex");
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    // Obter o corpo da requisição como texto
+    // Obter o corpo da requisição como texto (necessário para verificação HMAC)
     const body = await req.text();
     const headersList = headers();
 
-    console.log(
-      "[WEBHOOK_RECEIVED] Headers:",
-      Object.fromEntries(headersList.entries())
-    );
+    // Verificar assinatura do webhook
+    const webhookSecret = process.env.PAGARME_WEBHOOK_SECRET;
+    const signature = headersList.get("x-hub-signature");
+
+    if (webhookSecret) {
+      if (!verifyWebhookSignature(body, signature, webhookSecret)) {
+        console.error("[WEBHOOK_SIGNATURE_INVALID] Assinatura inválida ou ausente");
+        return new NextResponse("Unauthorized", { status: 401 });
+      }
+    } else {
+      console.warn("[WEBHOOK_SECURITY_WARNING] PAGARME_WEBHOOK_SECRET não configurado — webhook não verificado");
+    }
 
     // Converter o corpo para JSON
     const webhookData = JSON.parse(body);
 
-    // Log completo do payload para debug
-    console.log("[WEBHOOK_PAYLOAD]", JSON.stringify(webhookData, null, 2));
-    console.log("[WEBHOOK_ORDER_ID]", webhookData.data?.id);
+    console.log("[WEBHOOK_RECEIVED]", webhookData.type, "orderId:", webhookData.data?.id);
 
     // Processar evento
     switch (webhookData.type) {
@@ -49,13 +72,8 @@ export async function POST(req: Request) {
 
 async function handleOrderPaid(data: any) {
   try {
-    console.log(
-      "[HANDLE_ORDER_PAID] Dados recebidos:",
-      JSON.stringify(data, null, 2)
-    );
-
     const pagarmeTransactionId = data.id;
-    console.log("[HANDLE_ORDER_PAID] ID da transação:", pagarmeTransactionId);
+    console.log("[HANDLE_ORDER_PAID] transactionId:", pagarmeTransactionId);
 
     if (!pagarmeTransactionId) {
       console.error(
@@ -73,17 +91,7 @@ async function handleOrderPaid(data: any) {
         },
       });
 
-      console.log(
-        "[HANDLE_ORDER_PAID] Pedido encontrado:",
-        order ? "Sim" : "Não"
-      );
-
       if (order) {
-        console.log(
-          "[HANDLE_ORDER_PAID] Atualizando status do pedido:",
-          order.id
-        );
-
         // Atualizar o status e salvar resposta da Pagar.me
         const updatedOrder = await prisma.order.update({
           where: { id: order.id },
@@ -94,11 +102,7 @@ async function handleOrderPaid(data: any) {
           },
         });
 
-        console.log(
-          "[HANDLE_ORDER_PAID] Pedido atualizado:",
-          updatedOrder.id,
-          updatedOrder.status
-        );
+        console.log("[HANDLE_ORDER_PAID] Pedido atualizado:", updatedOrder.id, "->", updatedOrder.status);
 
         // Processar cupom
         if (updatedOrder.couponId) {
@@ -182,10 +186,7 @@ async function handleOrderPaid(data: any) {
 // ✅ FUNÇÃO MELHORADA PARA CAPTURAR DETALHES DA FALHA
 async function handleOrderFailed(data: any) {
   try {
-    console.log(
-      "[HANDLE_ORDER_FAILED] Dados da falha:",
-      JSON.stringify(data, null, 2)
-    );
+    console.log("[HANDLE_ORDER_FAILED] transactionId:", data.id);
 
     // Extrair informações da falha
     let failureReason = "Falha no pagamento";
@@ -311,10 +312,7 @@ async function handleOrderFailed(data: any) {
 
 async function handleOrderRefunded(data: any) {
   try {
-    console.log(
-      "[HANDLE_ORDER_REFUNDED] Dados do reembolso:",
-      JSON.stringify(data, null, 2)
-    );
+    console.log("[HANDLE_ORDER_REFUNDED] transactionId:", data.id);
 
     // Buscar pelo ID da transação Pagar.me ou ID direto
     let order = await prisma.order.findUnique({
@@ -347,10 +345,7 @@ async function handleOrderRefunded(data: any) {
 
 async function handleOrderPending(data: any) {
   try {
-    console.log(
-      "[HANDLE_ORDER_PENDING] Dados pendente:",
-      JSON.stringify(data, null, 2)
-    );
+    console.log("[HANDLE_ORDER_PENDING] transactionId:", data.id);
 
     // Buscar pelo ID da transação Pagar.me ou ID direto
     let order = await prisma.order.findUnique({

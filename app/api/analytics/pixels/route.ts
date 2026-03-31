@@ -2,15 +2,22 @@
 // app/api/analytics/pixels/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { maskDocument } from "@/lib/mask";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get("days") || "30");
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 200);
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
     const eventTypeParam = searchParams.get("eventType");
@@ -188,7 +195,7 @@ export async function GET(request: Request) {
           value: eventData?.value || null,
           customerName: order?.customer?.name || null,
           customerEmail: order?.customer?.email || null,
-          customerDocument: order?.customer?.document || null,
+          customerDocument: order?.customer?.document ? maskDocument(order.customer.document) : null,
           orderId: event.orderId,
           orderStatus: order?.status || null,
           paymentMethod: order?.paymentMethod || null,
@@ -205,7 +212,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: "Failed to fetch analytics",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: "Erro interno do servidor",
         summary: { totalEvents: 0, totalConversions: 0, totalRevenue: 0, conversionRate: 0 },
         charts: { eventsByType: [], eventsByDay: [] },
         platforms: { pixelsByPlatform: [] },

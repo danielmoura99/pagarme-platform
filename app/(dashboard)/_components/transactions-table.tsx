@@ -339,106 +339,138 @@ export function TransactionsTable() {
     setIsModalOpen(true);
   };
 
+  // Helper para buscar dados de exportação com PII desmascarado
+  const fetchExportData = async () => {
+    const queryParams = new URLSearchParams({
+      from: dateRange.from.toISOString(),
+      to: dateRange.to.toISOString(),
+      limit: "999999",
+      export: "true",
+      unmask: "true",
+    });
+
+    if (productFilters.length > 0) {
+      productFilters.forEach((productId) => {
+        queryParams.append("products[]", productId);
+      });
+    }
+
+    const response = await fetch(`/api/transactions?${queryParams.toString()}`);
+    if (!response.ok) throw new Error("Failed to fetch transactions for export");
+    const data: TransactionsResponse = await response.json();
+    return data.transactions;
+  };
+
   // Exportar para CSV
-  const exportToCSV = () => {
-    const headers = [
-      "ID",
-      "Pedido",
-      "Nome Cliente",
-      "Email Cliente",
-      "Documento Cliente",
-      "Telefone Cliente",
-      "Produto",
-      "Valor",
-      "Parcelas",
-      "Método",
-      "Status",
-      "Afiliado",
-      "Comissão Split",
-      "ID Pagar.me",
-      "Tentativas",
-      "Motivo Falha",
-      "Código Falha",
-      "Data",
-    ];
+  const exportToCSV = async () => {
+    try {
+      const allTransactions = await fetchExportData();
 
-    const csvRows = [
-      headers.join(","),
-      ...filteredTransactions.map((t) => {
-        return [
-          t.id,
-          t.orderId,
-          `"${t.customerDetails.name.replace(/"/g, '""')}"`,
-          `"${t.customerDetails.email.replace(/"/g, '""')}"`,
-          `"${t.customerDetails.document.replace(/"/g, '""')}"`,
-          t.customerDetails.phone
-            ? `"${t.customerDetails.phone.replace(/"/g, '""')}"`
-            : "Não informado",
-          `"${t.product.replace(/"/g, '""')}"`,
-          formatCurrency(t.amount).replace(/\./g, ","),
-          t.installments && t.installments > 1 ? `${t.installments}x` : "1x",
-          t.paymentMethod === "credit_card" ? "Cartão" : "PIX",
-          t.status === "paid"
-            ? "Pago"
-            : t.status === "pending"
-              ? "Pendente"
-              : t.status === "failed"
-                ? "Falhou"
-                : "Reembolsado",
-          t.affiliate ? `"${t.affiliate.name.replace(/"/g, '""')}"` : "Direto",
-          t.splitAmount
-            ? formatCurrency(Math.round(t.splitAmount)).replace(/\./g, ",")
-            : "R$ 0,00",
-          t.pagarmeTransactionId
-            ? `"${t.pagarmeTransactionId.replace(/"/g, '""')}"`
-            : "N/A",
-          t.attempts ? t.attempts.toString() : "1",
-          t.failureReason ? `"${t.failureReason.replace(/"/g, '""')}"` : "N/A",
-          t.failureCode ? `"${t.failureCode.replace(/"/g, '""')}"` : "N/A",
-          format(new Date(t.date), "dd/MM/yyyy HH:mm", { locale: ptBR }),
-        ].join(",");
-      }),
-    ].join("\n");
+      const headers = [
+        "ID",
+        "Pedido",
+        "Nome Cliente",
+        "Email Cliente",
+        "Documento Cliente",
+        "Telefone Cliente",
+        "Produto",
+        "Valor",
+        "Parcelas",
+        "Método",
+        "Status",
+        "Afiliado",
+        "Comissão Split",
+        "ID Pagar.me",
+        "Tentativas",
+        "Motivo Falha",
+        "Código Falha",
+        "Data",
+      ];
 
-    // Adicionar BOM (Byte Order Mark) para garantir encoding UTF-8 correto
-    const BOM = "\uFEFF";
-    const blob = new Blob([BOM + csvRows], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `transacoes_detalhadas_${format(new Date(), "yyyy-MM-dd")}.csv`
-    );
-    link.click();
+      const csvRows = [
+        headers.join(","),
+        ...allTransactions.map((t) => {
+          return [
+            t.id,
+            t.orderId,
+            `"${t.customerDetails.name.replace(/"/g, '""')}"`,
+            `"${t.customerDetails.email.replace(/"/g, '""')}"`,
+            `"${t.customerDetails.document.replace(/"/g, '""')}"`,
+            t.customerDetails.phone
+              ? `"${t.customerDetails.phone.replace(/"/g, '""')}"`
+              : "Não informado",
+            `"${t.product.replace(/"/g, '""')}"`,
+            formatCurrency(t.amount).replace(/\./g, ","),
+            t.installments && t.installments > 1 ? `${t.installments}x` : "1x",
+            t.paymentMethod === "credit_card" ? "Cartão" : "PIX",
+            t.status === "paid"
+              ? "Pago"
+              : t.status === "pending"
+                ? "Pendente"
+                : t.status === "failed"
+                  ? "Falhou"
+                  : "Reembolsado",
+            t.affiliate ? `"${t.affiliate.name.replace(/"/g, '""')}"` : "Direto",
+            t.splitAmount
+              ? formatCurrency(Math.round(t.splitAmount)).replace(/\./g, ",")
+              : "R$ 0,00",
+            t.pagarmeTransactionId
+              ? `"${t.pagarmeTransactionId.replace(/"/g, '""')}"`
+              : "N/A",
+            t.attempts ? t.attempts.toString() : "1",
+            t.failureReason ? `"${t.failureReason.replace(/"/g, '""')}"` : "N/A",
+            t.failureCode ? `"${t.failureCode.replace(/"/g, '""')}"` : "N/A",
+            format(new Date(t.date), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+          ].join(",");
+        }),
+      ].join("\n");
+
+      // Adicionar BOM (Byte Order Mark) para garantir encoding UTF-8 correto
+      const BOM = "\uFEFF";
+      const blob = new Blob([BOM + csvRows], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `transacoes_detalhadas_${format(new Date(), "yyyy-MM-dd")}.csv`
+      );
+      link.click();
+    } catch (error) {
+      console.error("Error exporting CSV:", error);
+      alert("Erro ao exportar CSV. Tente novamente.");
+    }
   };
 
   // Exportar para JSON
-  const exportToJSON = () => {
-    const formattedData = filteredTransactions.map((t) => ({
-      // Informações básicas da transação
-      id: t.id,
-      orderId: t.orderId,
-      pagarmeTransactionId: t.pagarmeTransactionId,
+  const exportToJSON = async () => {
+    try {
+      const allTransactions = await fetchExportData();
 
-      // Informações do cliente
-      customer: {
-        name: t.customerDetails.name,
-        email: t.customerDetails.email,
-        document: t.customerDetails.document,
-        formattedDocument: t.customerDetails.document.replace(
-          /(\d{3})(\d{3})(\d{3})(\d{2})/,
-          "$1.$2.$3-$4"
-        ),
-        phone: t.customerDetails.phone || "Não informado",
-      },
+      const formattedData = allTransactions.map((t) => ({
+        // Informações básicas da transação
+        id: t.id,
+        orderId: t.orderId,
+        pagarmeTransactionId: t.pagarmeTransactionId,
 
-      // Informações do produto
-      product: {
-        name: t.product,
-      },
+        // Informações do cliente
+        customer: {
+          name: t.customerDetails.name,
+          email: t.customerDetails.email,
+          document: t.customerDetails.document,
+          formattedDocument: t.customerDetails.document.replace(
+            /(\d{3})(\d{3})(\d{3})(\d{2})/,
+            "$1.$2.$3-$4"
+          ),
+          phone: t.customerDetails.phone || "Não informado",
+        },
 
-      // Informações de pagamento
+        // Informações do produto
+        product: {
+          name: t.product,
+        },
+
+        // Informações de pagamento
       payment: {
         amount: t.amount,
         formattedAmount: formatCurrency(t.amount),
@@ -503,6 +535,10 @@ export function TransactionsTable() {
       `transacoes_detalhadas_${format(new Date(), "yyyy-MM-dd")}.json`
     );
     link.click();
+    } catch (error) {
+      console.error("Error exporting JSON:", error);
+      alert("Erro ao exportar JSON. Tente novamente.");
+    }
   };
 
   // Gerenciar seleção múltipla de produtos

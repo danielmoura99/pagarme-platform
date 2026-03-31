@@ -2,11 +2,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateToken } from "@/lib/facebook-ads";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
     const config = await prisma.facebookAdsConfig.findFirst();
 
     if (!config) {
@@ -38,6 +44,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { accessToken, adAccountId, adAccountName, autoSync, syncInterval } = body;
 

@@ -78,8 +78,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verificar senha
-    const isValid = password === adminPassword;
+    // Verificar senha com comparação timing-safe (previne timing attacks)
+    let isValid = false;
+    try {
+      const passwordBuf = Buffer.from(password);
+      const adminPasswordBuf = Buffer.from(adminPassword);
+      // timingSafeEqual requer buffers do mesmo tamanho
+      if (passwordBuf.length === adminPasswordBuf.length) {
+        isValid = require("crypto").timingSafeEqual(passwordBuf, adminPasswordBuf);
+      }
+      // Se tamanhos diferentes, isValid permanece false
+    } catch {
+      isValid = false;
+    }
     
     if (isValid) {
       recordAttempt(clientIP, true);

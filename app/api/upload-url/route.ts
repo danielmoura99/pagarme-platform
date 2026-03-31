@@ -1,8 +1,17 @@
 // app/api/upload-url/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -14,10 +23,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validar se é uma imagem
-    if (!file.type.startsWith("image/")) {
+    // Validar tamanho (máx 5MB)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: "O arquivo deve ser uma imagem" },
+        { error: "Arquivo muito grande. Tamanho máximo: 5MB" },
+        { status: 400 }
+      );
+    }
+
+    // Validar tipo e extensão (Content-Type não é suficiente sozinho)
+    const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    const ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+
+    if (!ALLOWED_TYPES.includes(file.type) || !ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      return NextResponse.json(
+        { error: "Formato não permitido. Use: JPG, PNG, GIF ou WebP" },
         { status: 400 }
       );
     }
@@ -38,10 +60,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Erro ao fazer upload:", error);
     return NextResponse.json(
-      {
-        error: "Erro ao processar o upload",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: "Erro ao processar o upload" },
       { status: 500 }
     );
   }

@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { AffiliateBankInfo } from "@/types/pagarme";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,10 @@ export async function GET(
 ) {
   const { affiliateId } = await params;
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
     const affiliate = await prisma.affiliate.findUnique({
       where: { id: affiliateId },
       include: {
@@ -42,6 +48,11 @@ export async function PUT(
 ) {
   const { affiliateId } = await params;
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
     const body = await request.json();
     const bankInfo = body.bankInfo || {};
 
@@ -101,6 +112,11 @@ export async function DELETE(
   { params }: { params: Promise<{ affiliateId: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
     const { affiliateId } = await params;
     const affiliate = await prisma.affiliate.findUnique({
       where: { id: affiliateId },

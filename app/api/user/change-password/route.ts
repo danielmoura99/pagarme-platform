@@ -4,9 +4,22 @@ import { prisma } from "@/lib/db";
 import { hash, compare } from "bcrypt";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
+    // Rate limiting: 5 tentativas por 15 minutos
+    const clientIP = getClientIP(req);
+    const rateLimit = checkRateLimit("change-password", clientIP, 5, 15 * 60_000);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Muitas tentativas. Aguarde antes de tentar novamente." },
+        { status: 429 }
+      );
+    }
+
     // Verificar autenticação
     const session = await getServerSession(authOptions);
 
@@ -35,9 +48,19 @@ export async function POST(req: Request) {
       );
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       return NextResponse.json(
-        { error: "A nova senha deve ter no mínimo 6 caracteres" },
+        { error: "A nova senha deve ter no mínimo 8 caracteres" },
+        { status: 400 }
+      );
+    }
+
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    if (!hasUppercase || !hasLowercase || !hasNumber) {
+      return NextResponse.json(
+        { error: "A senha deve conter ao menos 1 letra maiúscula, 1 minúscula e 1 número" },
         { status: 400 }
       );
     }
@@ -65,7 +88,7 @@ export async function POST(req: Request) {
     }
 
     // Hash da nova senha
-    const hashedPassword = await hash(newPassword, 10);
+    const hashedPassword = await hash(newPassword, 12);
 
     // Atualizar senha e updatedAt (para invalidar sessões antigas)
     await prisma.user.update({

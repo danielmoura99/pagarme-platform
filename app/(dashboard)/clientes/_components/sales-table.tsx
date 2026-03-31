@@ -255,12 +255,12 @@ export function SalesTable() {
   // Filtrar vendas localmente (sem afetar paginação)
   const filteredSales = sales
     .filter((sale) => {
-      // Filtragem por texto (nome, email, documento ou produto)
+      // Filtragem por texto (nome, email ou produto)
+      const query = searchQuery.toLowerCase();
       const textMatch =
-        sale.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sale.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sale.customerDocument.includes(searchQuery.toLowerCase()) ||
-        sale.productName.toLowerCase().includes(searchQuery.toLowerCase());
+        sale.customerName.toLowerCase().includes(query) ||
+        sale.customerEmail.toLowerCase().includes(query) ||
+        sale.productName.toLowerCase().includes(query);
 
       return textMatch;
     })
@@ -288,11 +288,13 @@ export function SalesTable() {
   // Exportar para CSV - busca TODOS os dados do período
   const exportToCSV = async () => {
     try {
-      // Buscar TODOS os dados (sem paginação) aplicando os mesmos filtros
+      // Buscar TODOS os dados (sem paginação) com PII desmascarado para exportação
       const queryParams = new URLSearchParams({
         from: dateRange.from.toISOString(),
         to: dateRange.to.toISOString(),
-        limit: "999999", // Sem limite para exportação
+        limit: "999999",
+        export: "true",
+        unmask: "true",
       });
 
       if (statusFilter !== "all") {
@@ -415,11 +417,13 @@ export function SalesTable() {
   // Exportar para JSON - busca TODOS os dados do período
   const exportToJSON = async () => {
     try {
-      // Buscar TODOS os dados (sem paginação) aplicando os mesmos filtros
+      // Buscar TODOS os dados (sem paginação) com PII desmascarado para exportação
       const queryParams = new URLSearchParams({
         from: dateRange.from.toISOString(),
         to: dateRange.to.toISOString(),
-        limit: "999999", // Sem limite para exportação
+        limit: "999999",
+        export: "true",
+        unmask: "true",
       });
 
       if (statusFilter !== "all") {

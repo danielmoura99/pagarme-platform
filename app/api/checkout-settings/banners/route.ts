@@ -1,6 +1,10 @@
 // app/api/checkout-settings/banners/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -47,10 +51,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
 
-    console.log("Atualizando configurações de banners:", body);
 
     const updatedSettings = await prisma.checkoutSettings.upsert({
       where: { id: "default" },
@@ -93,7 +101,6 @@ export async function POST(request: Request) {
       },
     });
 
-    console.log("Configurações salvas:", updatedSettings);
 
     return NextResponse.json({
       success: true,
@@ -113,10 +120,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Erro ao atualizar configurações dos banners:", error);
     return NextResponse.json(
-      {
-        error: "Falha ao atualizar configurações dos banners",
-        details: String(error),
-      },
+      { error: "Falha ao atualizar configurações dos banners" },
       { status: 500 }
     );
   }

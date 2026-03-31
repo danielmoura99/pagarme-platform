@@ -2,8 +2,17 @@
 import { NextResponse } from "next/server";
 import { PixelEventDeduplicator } from "@/lib/pixel-deduplication";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const daysOld = parseInt(searchParams.get("days") || "7");
@@ -53,7 +62,12 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+
   try {
     // Estatísticas de duplicatas
     const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

@@ -1,6 +1,7 @@
 // app/api/integrations/rd-station/callback/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +12,15 @@ export async function GET(request: Request) {
     const state = searchParams.get('state');
     const error = searchParams.get('error');
 
-    console.log("[RD_STATION_CALLBACK_START]", {
-      code: code ? "RECEIVED" : "MISSING",
-      state,
-      error,
-      url: request.url
-    });
+    // Validar state (CSRF protection)
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("rd_oauth_state")?.value;
+    if (!state || !storedState || state !== storedState) {
+      console.warn("[RD_STATION_CALLBACK_INVALID_STATE]", { state, hasStoredState: !!storedState });
+      return NextResponse.redirect(
+        `${process.env.NEXTAUTH_URL}/integrations/rd-station?error=invalid_state`
+      );
+    }
 
     // Se houve erro na autorização
     if (error) {

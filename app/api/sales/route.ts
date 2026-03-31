@@ -1,11 +1,18 @@
 // app/api/sales/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { maskDocument, maskPhone } from "@/lib/mask";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get("from")
       ? new Date(searchParams.get("from") as string)
@@ -16,8 +23,12 @@ export async function GET(request: Request) {
 
     // Parâmetros de paginação
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const isExport = searchParams.get("export") === "true";
+    const limit = isExport
+      ? parseInt(searchParams.get("limit") || "50")
+      : Math.min(parseInt(searchParams.get("limit") || "50"), 200);
     const skip = (page - 1) * limit;
+    const unmask = searchParams.get("unmask") === "true";
 
     // Filtros
     const statusFilter = searchParams.get("status");
@@ -79,8 +90,8 @@ export async function GET(request: Request) {
       id: order.id,
       customerName: order.customer.name,
       customerEmail: order.customer.email,
-      customerDocument: order.customer.document,
-      customerPhone: order.customer.phone,
+      customerDocument: unmask ? order.customer.document : maskDocument(order.customer.document),
+      customerPhone: unmask ? order.customer.phone : maskPhone(order.customer.phone),
       productName: order.items[0]?.product?.name || "Produto não encontrado",
       amount: order.amount,
       status: order.status,

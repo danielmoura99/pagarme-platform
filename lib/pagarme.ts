@@ -93,11 +93,6 @@ export class PagarmeClient {
         },
       };
 
-      console.log(
-        "[Pagar.me] Payload da transação:",
-        JSON.stringify(payload, null, 2)
-      );
-
       const response = await fetch(`${PAGARME_API_URL}/orders`, {
         method: "POST",
         headers: this.headers,
@@ -105,14 +100,6 @@ export class PagarmeClient {
       });
 
       const responseData = await response.text();
-
-      // Primeiro vamos logar a resposta completa para debug
-      console.log("[Pagar.me] Resposta bruta:", responseData);
-      console.log("[Pagar.me] Status da resposta:", response.status);
-      console.log(
-        "[Pagar.me] Headers:",
-        Object.fromEntries(response.headers.entries())
-      );
 
       if (!response.ok) {
         // Tenta fazer o parse apenas se houver conteúdo
@@ -190,24 +177,13 @@ export class PagarmeClient {
     });
 
     // Log da resposta completa
-    console.log(
-      "[Pagar.me] Resposta PIX completa:",
-      JSON.stringify(transaction, null, 2)
-    );
-
     // Verificar se temos os dados do PIX
     const pixData = transaction.charges?.[0]?.last_transaction;
     if (!pixData?.qr_code || !pixData?.qr_code_url) {
       throw new Error("Dados do PIX não gerados corretamente");
     }
 
-    // Log específico dos dados do PIX
-    console.log("[Pagar.me] Dados do PIX:", {
-      qr_code: pixData.qr_code,
-      qr_code_url: pixData.qr_code_url,
-      expires_at: pixData.expires_at,
-      status: pixData.status,
-    });
+    console.log("[Pagar.me] PIX gerado — id:", transaction.id, "status:", transaction.status);
 
     return transaction;
   }
@@ -295,10 +271,7 @@ export class PagarmeClient {
   // Criar novo recebedor
   async createRecipient(data: Recipient): Promise<RecipientResponse> {
     try {
-      console.log(
-        "[Pagar.me] Creating recipient:",
-        JSON.stringify(data, null, 2)
-      );
+      console.log("[Pagar.me] Creating recipient:", data.name || "unknown");
 
       const response = await fetch(`${PAGARME_API_URL}/recipients`, {
         method: "POST",
@@ -307,12 +280,6 @@ export class PagarmeClient {
       });
 
       const responseData = await response.text();
-      console.log("[Pagar.me] Resposta bruta:", responseData);
-      console.log("[Pagar.me] Status da resposta:", response.status);
-      console.log(
-        "[Pagar.me] Headers:",
-        Object.fromEntries(response.headers.entries())
-      );
 
       if (!response.ok) {
         let errorMessage = "Failed to create recipient";
@@ -320,11 +287,8 @@ export class PagarmeClient {
           try {
             const errorData = JSON.parse(responseData);
             errorMessage = errorData.message || errorMessage;
-          } catch (e) {
-            console.error(
-              "[Pagar.me] Erro ao fazer parse da resposta de erro:",
-              responseData
-            );
+          } catch {
+            console.error("[Pagar.me] Erro no parse da resposta de erro — status:", response.status);
           }
         }
         throw new Error(errorMessage);

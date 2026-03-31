@@ -274,8 +274,7 @@ export function ClientsTable() {
       // Filtragem por texto (nome, email ou documento)
       const textMatch =
         client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.document.includes(searchQuery.toLowerCase());
+        client.email.toLowerCase().includes(searchQuery.toLowerCase());
 
       return textMatch;
     })
@@ -305,14 +304,15 @@ export function ClientsTable() {
     setIsModalOpen(true);
   };
 
-  // Exportar para CSV - busca TODOS os dados do período
+  // Exportar para CSV - busca TODOS os dados do período com PII desmascarado
   const exportToCSV = async () => {
     try {
-      // Buscar TODOS os dados (sem paginação) aplicando os mesmos filtros
       const queryParams = new URLSearchParams({
         from: dateRange.from.toISOString(),
         to: dateRange.to.toISOString(),
-        limit: "999999", // Sem limite para exportação
+        limit: "999999",
+        export: "true",
+        unmask: "true",
       });
 
       if (statusFilter !== "all") {
@@ -335,8 +335,7 @@ export function ClientsTable() {
         if (!searchQuery) return true;
         const textMatch =
           client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.document.includes(searchQuery.toLowerCase());
+          client.email.toLowerCase().includes(searchQuery.toLowerCase());
         return textMatch;
       });
 
@@ -439,14 +438,15 @@ export function ClientsTable() {
     }
   };
 
-  // Exportar para JSON - busca TODOS os dados do período
+  // Exportar para JSON - busca TODOS os dados do período com PII desmascarado
   const exportToJSON = async () => {
     try {
-      // Buscar TODOS os dados (sem paginação) aplicando os mesmos filtros
       const queryParams = new URLSearchParams({
         from: dateRange.from.toISOString(),
         to: dateRange.to.toISOString(),
-        limit: "999999", // Sem limite para exportação
+        limit: "999999",
+        export: "true",
+        unmask: "true",
       });
 
       if (statusFilter !== "all") {
@@ -469,8 +469,7 @@ export function ClientsTable() {
         if (!searchQuery) return true;
         const textMatch =
           client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.document.includes(searchQuery.toLowerCase());
+          client.email.toLowerCase().includes(searchQuery.toLowerCase());
         return textMatch;
       });
 

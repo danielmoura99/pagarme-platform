@@ -3,6 +3,26 @@
 
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user || session.user.role !== "admin") {
+    throw new Error("Não autorizado");
+  }
+}
+
+// Sanitiza CSS removendo padrões perigosos (data exfiltration, JS injection, imports externos)
+function sanitizeCustomCss(css: string): string {
+  return css
+    .replace(/url\s*\([^)]*\)/gi, "") // remove url() calls (data exfiltration)
+    .replace(/expression\s*\([^)]*\)/gi, "") // remove expression() (IE JS injection)
+    .replace(/@import\b[^;]*/gi, "") // remove @import (load external resources)
+    .replace(/javascript\s*:/gi, "") // remove javascript: URIs
+    .replace(/<\/?script[^>]*>/gi, "") // remove <script> tags se houver
+    .trim();
+}
 
 // Define o tipo para as configurações do checkout
 export interface CheckoutSettings {
@@ -29,6 +49,7 @@ export interface CheckoutSettings {
 
 // Buscar as configurações do checkout
 export async function getCheckoutSettings(): Promise<CheckoutSettings> {
+  await requireAdmin();
   try {
     // Busca as configurações do banco de dados
     const settings = await prisma.checkoutSettings.findFirst();
@@ -114,6 +135,11 @@ export async function getCheckoutSettings(): Promise<CheckoutSettings> {
 
 // Atualizar as configurações do checkout
 export async function updateCheckoutSettings(data: CheckoutSettings) {
+  await requireAdmin();
+  // Sanitizar CSS antes de salvar
+  if (data.customCss) {
+    data.customCss = sanitizeCustomCss(data.customCss);
+  }
   try {
     // Verifica se já existe configurações
     const existingSettings = await prisma.checkoutSettings.findFirst();

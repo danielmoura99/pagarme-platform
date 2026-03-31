@@ -21,22 +21,27 @@ export default function LoginForm() {
     setError(null);
 
     try {
+      console.log("[LOGIN_FORM] Calling signIn...");
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
 
-      if (result?.error) {
-        setError(result.error);
+      console.log("[LOGIN_FORM] signIn result:", JSON.stringify(result));
+
+      if (!result?.ok || result?.error) {
+        console.log("[LOGIN_FORM] Login failed:", result?.error, "status:", result?.status);
+        setError("Email ou senha incorretos");
         return;
       }
 
+      console.log("[LOGIN_FORM] Login success, redirecting...");
       // Se o login for bem-sucedido, redireciona para a página inicial
       router.push("/");
       router.refresh();
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
+      console.error("[LOGIN_FORM] Exception:", error);
       setError("Ocorreu um erro ao fazer login");
     } finally {
       setIsLoading(false);

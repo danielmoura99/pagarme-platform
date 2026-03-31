@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { maskDocument, maskPhone } from "@/lib/mask";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,12 @@ export async function GET(request: Request) {
 
     // Parâmetros de paginação
     const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const isExport = searchParams.get("export") === "true";
+    const limit = isExport
+      ? parseInt(searchParams.get("limit") || "50")
+      : Math.min(parseInt(searchParams.get("limit") || "50"), 200);
     const skip = (page - 1) * limit;
+    const unmask = searchParams.get("unmask") === "true";
 
     // Parâmetros de filtro
     const affiliateFilter = searchParams.get("affiliate");
@@ -128,8 +133,8 @@ export async function GET(request: Request) {
         customerDetails: {
           name: order.customer.name,
           email: order.customer.email,
-          document: order.customer.document,
-          phone: order.customer.phone,
+          document: unmask ? order.customer.document : maskDocument(order.customer.document),
+          phone: unmask ? order.customer.phone : maskPhone(order.customer.phone),
         },
         product: product?.name || "Produto não encontrado",
         paymentMethod: order.paymentMethod as "credit_card" | "pix",

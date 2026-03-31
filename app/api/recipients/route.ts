@@ -2,9 +2,18 @@
 import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
     const body = await request.json();
 
     // 1. Criar recebedor no Pagar.me
@@ -58,7 +67,7 @@ export async function POST(request: Request) {
       {
         success: false,
         message: "Failed to create recipient",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Falha ao criar recipient",
       },
       { status: 500 }
     );
@@ -66,6 +75,11 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const page = searchParams.get("page");
