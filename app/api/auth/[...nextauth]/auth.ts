@@ -156,15 +156,8 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 horas (alinhado com o check de expiração do callback)
   },
-  cookies: {
-    sessionToken: {
-      name: "next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax" as const, // "strict" quebraria redirects OAuth
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      },
-    },
-  },
+  // Cookies: NextAuth aplica defaults seguros automaticamente baseado no NEXTAUTH_URL:
+  // - httpOnly: true, sameSite: "lax", secure: true (quando HTTPS)
+  // - Nome: __Secure-next-auth.session-token (HTTPS) ou next-auth.session-token (HTTP)
+  // Não configurar explicitamente para evitar mismatch com getToken() do middleware.
 };
