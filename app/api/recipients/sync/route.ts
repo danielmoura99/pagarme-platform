@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { pagarme } from "@/lib/pagarme";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 async function syncAffiliates() {
   try {
@@ -228,6 +230,11 @@ async function syncAffiliates() {
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || session.user.role !== "admin") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
     console.log("Iniciando endpoint GET /api/recipients/sync");
     const result = await syncAffiliates();
 
@@ -240,8 +247,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Erro desconhecido",
-        details: error,
+        error: "Erro ao sincronizar afiliados",
       },
       { status: 500 }
     );

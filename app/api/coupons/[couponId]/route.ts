@@ -55,7 +55,6 @@ export async function DELETE(
       {
         success: false,
         message: "Erro ao processar cupom",
-        error: error instanceof Error ? error.message : "Erro desconhecido",
       },
       { status: 500 }
     );
