@@ -8,17 +8,6 @@ export const dynamic = "force-dynamic";
 
 export default async function RecipientsPage() {
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || ""}/recipients/all`,
-      {
-        cache: "no-store", // Evita caching
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch recipients: ${response.status}`);
-    }
-
     const recipients = await pagarme.listRecipients({
       status: "active",
       size: 200,
