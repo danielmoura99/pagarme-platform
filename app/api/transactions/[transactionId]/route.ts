@@ -13,7 +13,7 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "admin") {
+    if (!session?.user) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
@@ -42,6 +42,14 @@ export async function GET(
 
     if (!order) {
       return new NextResponse("Transação não encontrada", { status: 404 });
+    }
+
+    // Admin vê qualquer transação. Afiliado só vê as suas próprias.
+    const isAdmin = session.user.role === "admin";
+    const isOwnTransaction = order.affiliate?.user.id === session.user.id;
+
+    if (!isAdmin && !isOwnTransaction) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
     // Extrair informações de falha da resposta da Pagar.me se existir
