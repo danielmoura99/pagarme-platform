@@ -38,9 +38,9 @@ export async function POST(
       );
     }
 
-    // Buscar afiliado
-    const affiliate = await prisma.affiliate.findUnique({
-      where: { id: params.recipientId },
+    // Buscar afiliado pelo ID do Pagar.me (recipientId) que vem da tabela
+    const affiliate = await prisma.affiliate.findFirst({
+      where: { recipientId: params.recipientId },
       include: { user: true },
     });
 
