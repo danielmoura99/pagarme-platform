@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // app/(dashboard)/recipients/_components/cell-action.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Edit, Link2, MoreHorizontal, Trash, KeyRound } from "lucide-react";
+import { Edit, Link2, MoreHorizontal, Trash, KeyRound, Copy, Check, AlertTriangle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +11,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AlertModal } from "@/components/modals/alert-modal";
 import { RecipientColumn } from "./columns";
@@ -22,16 +29,30 @@ interface CellActionProps {
   data: RecipientColumn;
 }
 
+interface ResetResult {
+  newPassword: string;
+  affiliateName: string;
+  affiliateEmail: string;
+}
+
 export function CellAction({ data }: CellActionProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [resetResult, setResetResult] = useState<ResetResult | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const onEdit = () => {
-    // Nova rota de edição
     router.push(`/recipients/edit/${data.id}`);
+  };
+
+  const copyPassword = () => {
+    if (!resetResult) return;
+    navigator.clipboard.writeText(resetResult.newPassword);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const onResetPassword = async () => {
@@ -40,9 +61,7 @@ export function CellAction({ data }: CellActionProps) {
 
       const response = await fetch(
         `/api/recipients/${data.id}/reset-password`,
-        {
-          method: "POST",
-        }
+        { method: "POST" }
       );
 
       if (!response.ok) {
@@ -50,12 +69,7 @@ export function CellAction({ data }: CellActionProps) {
       }
 
       const result = await response.json();
-
-      toast({
-        title: "Senha resetada com sucesso!",
-        description: "Nova senha: Senha@123",
-      });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      setResetResult(result);
     } catch (error) {
       toast({
         variant: "destructive",
@@ -102,6 +116,66 @@ export function CellAction({ data }: CellActionProps) {
         onConfirm={onDelete}
         loading={loading}
       />
+
+      {/* Modal com a nova senha gerada */}
+      <Dialog open={!!resetResult} onOpenChange={() => { setResetResult(null); setCopied(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-blue-600" />
+              Senha Resetada com Sucesso
+            </DialogTitle>
+            <DialogDescription>
+              Copie a senha abaixo e envie para o afiliado. Ela não poderá ser visualizada novamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetResult && (
+            <div className="space-y-4">
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p><span className="font-medium text-foreground">Afiliado:</span> {resetResult.affiliateName}</p>
+                <p><span className="font-medium text-foreground">Email:</span> {resetResult.affiliateEmail}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Nova senha:</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted px-4 py-3 rounded-md text-lg font-mono tracking-widest text-center select-all">
+                    {resetResult.newPassword}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={copyPassword}
+                    className="shrink-0"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p>Esta senha é exibida apenas uma vez. Após fechar este modal, não será possível recuperá-la.</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={copyPassword} className="gap-2">
+              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copiado!" : "Copiar Senha"}
+            </Button>
+            <Button onClick={() => { setResetResult(null); setCopied(false); }}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="h-8 w-8 p-0">
