@@ -840,13 +840,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Criar pedido e incrementar usageCount do cupom atomicamente
-    const [order] = await prisma.$transaction([
-      prisma.order.create({ data: orderData }),
-      ...(dbCoupon
-        ? [prisma.coupon.update({ where: { id: dbCoupon.id }, data: { usageCount: { increment: 1 } } })]
-        : []),
-    ]);
+    const order = await prisma.order.create({ data: orderData });
 
     // 8. Retornar resposta apropriada
     if (paymentMethod === "pix") {
