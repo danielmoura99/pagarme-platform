@@ -32,7 +32,6 @@ const checkoutSchema = z.object({
   selectedBumps: z.array(z.string()).optional(),
   coupon: z.object({
     code: z.string(),
-    discountPercentage: z.number().optional(),
   }).optional().nullable(),
   checkoutId: z.string().uuid().optional(),
   utmSource: z.string().max(500).optional().nullable(),
@@ -44,7 +43,7 @@ const checkoutSchema = z.object({
   landingPage: z.string().max(2000).optional().nullable(),
   installments: z.number().int().min(1).max(12).optional(),
   totalAmount: z.number().int().positive().optional(),
-}).passthrough();
+});
 
 // ✅ MAPEAMENTO DE ERROS DA PAGAR.ME PARA MENSAGENS EM PORTUGUÊS
 const ERROR_MESSAGES_MAP: Record<string, string> = {
@@ -166,6 +165,79 @@ function extractAndTranslateValidationErrors(errorResponse: any): {
   console.log("[EXTRACT_ERRORS] Result:", result);
 
   return result;
+}
+
+// Busca e valida o cupom completamente no servidor (expiração, limite de usos, produto)
+async function fetchValidatedCoupon(code: string, productId: string) {
+  const now = new Date();
+  const coupon = await prisma.coupon.findFirst({
+    where: {
+      code: code.toUpperCase(),
+      active: true,
+      AND: [
+        { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        { OR: [{ maxUses: null }, { maxUses: { gt: prisma.coupon.fields.usageCount } }] },
+      ],
+      products: { some: { id: productId } },
+    },
+  });
+  if (coupon) {
+    console.log(`[CHECKOUT] Cupom ${code} válido: ${coupon.discountPercentage}% de desconto`);
+  } else {
+    console.log(`[CHECKOUT] Cupom ${code} inválido, expirado, esgotado ou não aplicável ao produto`);
+  }
+  return coupon;
+}
+
+// Calcula o valor final no servidor — nunca confia no totalAmount do cliente
+async function computeServerAmount(
+  baseAmount: number,
+  selectedBumps: string[] | undefined,
+  productId: string,
+  couponDiscountPercentage: number | null,
+): Promise<number> {
+  let total = baseAmount;
+
+  if (selectedBumps && selectedBumps.length > 0) {
+    const validBumps = await prisma.orderBump.findMany({
+      where: {
+        productId,
+        active: true,
+        bumpProductId: { in: selectedBumps },
+      },
+      include: {
+        bumpProduct: {
+          include: {
+            prices: { where: { active: true }, orderBy: { createdAt: "desc" }, take: 1 },
+          },
+        },
+      },
+    });
+
+    for (const bump of validBumps) {
+      const bumpPrice = bump.bumpProduct.prices[0]?.amount;
+      if (bumpPrice) {
+        total += bumpPrice;
+      } else {
+        console.warn(`[CHECKOUT] Order bump ${bump.bumpProductId} sem preço ativo, ignorado`);
+      }
+    }
+
+    const ignoredBumps = selectedBumps.filter(
+      (id) => !validBumps.some((b) => b.bumpProductId === id),
+    );
+    if (ignoredBumps.length > 0) {
+      console.warn(`[CHECKOUT] Bumps ignorados (não pertencem ao produto ou inativos): ${ignoredBumps.join(", ")}`);
+    }
+  }
+
+  if (couponDiscountPercentage && couponDiscountPercentage > 0) {
+    const discount = Math.round((total * couponDiscountPercentage) / 100);
+    total = total - discount;
+    console.log(`[CHECKOUT] Desconto do cupom aplicado: -${discount} centavos (${couponDiscountPercentage}%)`);
+  }
+
+  return total;
 }
 
 export async function POST(request: Request) {
@@ -298,27 +370,7 @@ export async function POST(request: Request) {
     let dbCoupon = null;
     if (coupon && coupon.code) {
       try {
-        dbCoupon = await prisma.coupon.findFirst({
-          where: {
-            code: coupon.code.toUpperCase(),
-            active: true,
-            products: {
-              some: {
-                id: product.id,
-              },
-            },
-          },
-        });
-
-        if (dbCoupon) {
-          console.log(
-            `[API] Cupom ${coupon.code} encontrado com ID: ${dbCoupon.id}`
-          );
-        } else {
-          console.log(
-            `[API] Cupom ${coupon.code} não encontrado no banco de dados`
-          );
-        }
+        dbCoupon = await fetchValidatedCoupon(coupon.code, product.id);
       } catch (couponError) {
         console.error("[API] Erro ao buscar cupom:", couponError);
         // Continuar sem o cupom em caso de erro
@@ -406,7 +458,14 @@ export async function POST(request: Request) {
     // 5. Criar transação na Pagar.me
     let transaction: any = null;
     let pagarmeResponse = null;
-    const amount = body.totalAmount || dbProduct.prices[0].amount;
+    const amount = await computeServerAmount(
+      dbProduct.prices[0].amount,
+      selectedBumps,
+      product.id,
+      dbCoupon?.discountPercentage ?? null,
+    );
+    console.log(`[CHECKOUT] Valor calculado no servidor: ${amount} centavos (cliente enviou: ${parsed.data.totalAmount ?? "não enviado"})`);
+
 
     let orderBumpsInfo = null;
     if (selectedBumps && selectedBumps.length > 0) {
@@ -475,7 +534,7 @@ export async function POST(request: Request) {
             exp_year: parseInt(`20${expYear}`),
             cvv: cardData.cardCvv,
           },
-          installments: body.installments,
+          installments: parsed.data.installments,
           metadata: {
             ...metadata,
             product_name: dbProduct.name,
@@ -781,9 +840,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const order = await prisma.order.create({
-      data: orderData,
-    });
+    // Criar pedido e incrementar usageCount do cupom atomicamente
+    const [order] = await prisma.$transaction([
+      prisma.order.create({ data: orderData }),
+      ...(dbCoupon
+        ? [prisma.coupon.update({ where: { id: dbCoupon.id }, data: { usageCount: { increment: 1 } } })]
+        : []),
+    ]);
 
     // 8. Retornar resposta apropriada
     if (paymentMethod === "pix") {
