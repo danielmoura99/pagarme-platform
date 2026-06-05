@@ -11,7 +11,7 @@ import {
   TrendingDown,
 } from "lucide-react";
 
-interface Metrics {
+interface PeriodMetrics {
   totalSales: number;
   totalRevenue: number;
   averageTicket: number;
@@ -19,8 +19,18 @@ interface Metrics {
   revenueGrowthRate: number;
 }
 
+interface AllTimeMetrics {
+  totalSales: number;
+  totalRevenue: number;
+  averageTicket: number;
+}
+
+const defaultPeriod: PeriodMetrics = { totalSales: 0, totalRevenue: 0, averageTicket: 0, salesGrowthRate: 0, revenueGrowthRate: 0 };
+const defaultAllTime: AllTimeMetrics = { totalSales: 0, totalRevenue: 0, averageTicket: 0 };
+
 export function SalesMetrics() {
-  const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [metrics, setMetrics] = useState<PeriodMetrics>(defaultPeriod);
+  const [allTime, setAllTime] = useState<AllTimeMetrics>(defaultAllTime);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,22 +38,10 @@ export function SalesMetrics() {
       try {
         const response = await fetch("/api/analytics/sales?months=12");
         const result = await response.json();
-        setMetrics(result.metrics || {
-          totalSales: 0,
-          totalRevenue: 0,
-          averageTicket: 0,
-          salesGrowthRate: 0,
-          revenueGrowthRate: 0,
-        });
+        setMetrics(result.metrics || defaultPeriod);
+        setAllTime(result.allTimeMetrics || defaultAllTime);
       } catch (error) {
         console.error("Error fetching metrics:", error);
-        setMetrics({
-          totalSales: 0,
-          totalRevenue: 0,
-          averageTicket: 0,
-          salesGrowthRate: 0,
-          revenueGrowthRate: 0,
-        });
       } finally {
         setLoading(false);
       }
@@ -85,9 +83,9 @@ export function SalesMetrics() {
           <ShoppingCart className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{metrics.totalSales}</div>
+          <div className="text-2xl font-bold">{allTime.totalSales}</div>
           <p className="text-xs text-muted-foreground">
-            Vendas realizadas no período
+            Todas as vendas da plataforma
           </p>
         </CardContent>
       </Card>
@@ -100,10 +98,10 @@ export function SalesMetrics() {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {formatCurrency(metrics.totalRevenue)}
+            {formatCurrency(allTime.totalRevenue)}
           </div>
           <p className="text-xs text-muted-foreground">
-            Faturamento acumulado
+            Faturamento total acumulado
           </p>
         </CardContent>
       </Card>
@@ -116,10 +114,10 @@ export function SalesMetrics() {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {formatCurrency(metrics.averageTicket)}
+            {formatCurrency(allTime.averageTicket)}
           </div>
           <p className="text-xs text-muted-foreground">
-            Valor médio por venda
+            Valor médio por venda (geral)
           </p>
         </CardContent>
       </Card>

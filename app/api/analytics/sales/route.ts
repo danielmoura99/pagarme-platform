@@ -61,7 +61,16 @@ export async function GET(request: Request) {
       },
     });
 
-    // Processar dados para métricas
+    // Métricas de todo o período (sem filtro de data) para os cards de resumo
+    const allTimeOrders = await prisma.order.findMany({
+      where: { status: "paid" },
+      select: { amount: true },
+    });
+    const allTimeTotalSales = allTimeOrders.length;
+    const allTimeTotalRevenue = allTimeOrders.reduce((sum, o) => sum + o.amount, 0);
+    const allTimeAverageTicket = allTimeTotalSales > 0 ? allTimeTotalRevenue / allTimeTotalSales : 0;
+
+    // Processar dados para métricas do período selecionado
     const totalSales = orders.length;
     const totalRevenue = orders.reduce((sum, order) => sum + order.amount, 0);
     const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
@@ -253,6 +262,11 @@ export async function GET(request: Request) {
         averageTicket: averageTicket / 100,
         salesGrowthRate: Math.round(salesGrowthRate * 10) / 10,
         revenueGrowthRate: Math.round(revenueGrowthRate * 10) / 10,
+      },
+      allTimeMetrics: {
+        totalSales: allTimeTotalSales,
+        totalRevenue: allTimeTotalRevenue / 100,
+        averageTicket: allTimeAverageTicket / 100,
       },
       salesByMonth: salesByMonthArray,
       productsSold: productsSoldArray,
