@@ -36,7 +36,7 @@ export function SalesMetrics() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const response = await fetch("/api/analytics/sales?months=12");
+        const response = await fetch("/api/analytics/sales?months=12", { cache: "no-store" });
         const result = await response.json();
         setMetrics(result.metrics || defaultPeriod);
         setAllTime(result.allTimeMetrics || defaultAllTime);

@@ -276,7 +276,9 @@ export async function GET(request: Request) {
       topAffiliates,
     };
 
-    return NextResponse.json(responseData);
+    return NextResponse.json(responseData, {
+      headers: { "Cache-Control": "no-store, max-age=0, must-revalidate" },
+    });
   } catch (error) {
     console.error("Error fetching sales analytics:", error);
     return NextResponse.json(
