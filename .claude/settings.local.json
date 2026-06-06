@@ -29,7 +29,9 @@
       "Bash(rm \"e:/pagarme-platform/app/api/integrations/rd-station/force-enable/route.ts\")",
       "Bash(rm \"e:/pagarme-platform/app/api/integrations/rd-station/simple-auth/route.ts\")",
       "Bash(grep -rn session?.user e:/pagarme-platform/app/api/integrations/ e:/pagarme-platform/app/api/analytics/ e:/pagarme-platform/app/api/affiliates/ e:/pagarme-platform/app/api/coupons/)",
-      "Bash(node -e \"console.log\\(require\\(''e:/pagarme-platform/node_modules/next-auth/package.json''\\).version\\)\")"
+      "Bash(node -e \"console.log\\(require\\(''e:/pagarme-platform/node_modules/next-auth/package.json''\\).version\\)\")",
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "Bash(node -e ' *)"
     ],
     "deny": [],
     "ask": []

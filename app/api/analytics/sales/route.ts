@@ -2,9 +2,43 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
-import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
+
+// Fuso fixo do negócio (Brasil). Garante agrupamento por mês consistente
+// independentemente do fuso do servidor (Vercel roda em UTC).
+const TZ = "America/Sao_Paulo";
+
+// Chave de mês "MMM/yy" de um instante, no fuso do Brasil
+const monthKeyBR = (date: Date) => formatInTimeZone(date, TZ, "MMM/yy");
+
+// Constrói a lista de meses do período (do mais antigo ao atual) com limites
+// em instantes UTC corretos para o fuso do Brasil.
+function buildMonthsBR(months: number) {
+  const [curY, curM] = formatInTimeZone(new Date(), TZ, "yyyy-MM")
+    .split("-")
+    .map(Number);
+
+  const list: { key: string; start: Date; end: Date }[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    let y = curY;
+    let m = curM - i;
+    while (m <= 0) { m += 12; y -= 1; }
+
+    const start = fromZonedTime(`${y}-${String(m).padStart(2, "0")}-01T00:00:00`, TZ);
+
+    let ny = y;
+    let nm = m + 1;
+    if (nm > 12) { nm = 1; ny += 1; }
+    const end = new Date(
+      fromZonedTime(`${ny}-${String(nm).padStart(2, "0")}-01T00:00:00`, TZ).getTime() - 1
+    );
+
+    list.push({ key: monthKeyBR(start), start, end });
+  }
+  return list;
+}
 
 export async function GET(request: Request) {
   try {
@@ -17,9 +51,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const months = parseInt(searchParams.get("months") || "12");
 
-    // Data atual e início do período
-    const currentDate = new Date();
-    const startDate = subMonths(startOfMonth(currentDate), months - 1);
+    // Meses do período, com limites em instantes UTC corretos p/ o fuso do Brasil
+    const monthsBR = buildMonthsBR(months);
+    const startDate = monthsBR[0].start;
+    const endDate = monthsBR[monthsBR.length - 1].end;
 
     // Buscar apenas os dados necessários (sem customer para otimizar)
     const orders = await prisma.order.findMany({
@@ -27,7 +62,7 @@ export async function GET(request: Request) {
         status: "paid",
         createdAt: {
           gte: startDate,
-          lte: endOfMonth(currentDate),
+          lte: endDate,
         },
       },
       select: {
@@ -80,14 +115,12 @@ export async function GET(request: Request) {
     // Vendas por mês
     const salesByMonth: { [key: string]: { count: number; revenue: number } } = {};
 
-    for (let i = 0; i < months; i++) {
-      const date = subMonths(currentDate, months - 1 - i);
-      const monthKey = format(date, "MMM/yy");
-      salesByMonth[monthKey] = { count: 0, revenue: 0 };
-    }
+    monthsBR.forEach(({ key }) => {
+      salesByMonth[key] = { count: 0, revenue: 0 };
+    });
 
     orders.forEach((order) => {
-      const monthKey = format(order.createdAt, "MMM/yy");
+      const monthKey = monthKeyBR(order.createdAt);
       if (salesByMonth[monthKey]) {
         salesByMonth[monthKey].count += 1;
         salesByMonth[monthKey].revenue += order.amount;
@@ -152,8 +185,8 @@ export async function GET(request: Request) {
 
     // Calcular crescimento: mês anterior vs mês retrasado
     // Exemplo: Se estamos em Janeiro, compara Dezembro com Novembro
-    const lastMonth = format(subMonths(currentDate, 1), "MMM/yy");
-    const twoMonthsAgo = format(subMonths(currentDate, 2), "MMM/yy");
+    const lastMonth = monthsBR[monthsBR.length - 2]?.key ?? "";
+    const twoMonthsAgo = monthsBR[monthsBR.length - 3]?.key ?? "";
 
     // Crescimento em quantidade
     const lastMonthSales = salesByMonth[lastMonth]?.count || 0;
@@ -175,18 +208,16 @@ export async function GET(request: Request) {
     const affiliateSalesByMonth: { [key: string]: { withAffiliate: { count: number; revenue: number }, withoutAffiliate: { count: number; revenue: number } } } = {};
 
     // Inicializar todos os meses
-    for (let i = 0; i < months; i++) {
-      const date = subMonths(currentDate, months - 1 - i);
-      const monthKey = format(date, "MMM/yy");
-      affiliateSalesByMonth[monthKey] = {
+    monthsBR.forEach(({ key }) => {
+      affiliateSalesByMonth[key] = {
         withAffiliate: { count: 0, revenue: 0 },
         withoutAffiliate: { count: 0, revenue: 0 },
       };
-    }
+    });
 
     // Agrupar por mês e tipo
     orders.forEach((order) => {
-      const monthKey = format(order.createdAt, "MMM/yy");
+      const monthKey = monthKeyBR(order.createdAt);
       if (affiliateSalesByMonth[monthKey]) {
         if (order.affiliateId !== null) {
           affiliateSalesByMonth[monthKey].withAffiliate.count += 1;
