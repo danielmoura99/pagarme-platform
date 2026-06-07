@@ -54,7 +54,19 @@ export default function ProcessingContent() {
 
   // Verifica o status do pagamento
   useEffect(() => {
+    if (!orderId) return;
+
+    let isFetching = false;
+
     const checkPaymentStatus = async () => {
+      // Não consulta com a aba em segundo plano (economiza compute do banco)
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // Para de consultar após o PIX expirar
+      if (expiresAt && new Date(expiresAt).getTime() - Date.now() <= 0) return;
+      // Evita requisições sobrepostas
+      if (isFetching) return;
+
+      isFetching = true;
       try {
         const response = await fetch(`/api/orders/${orderId}/status`);
         const data = await response.json();
@@ -66,12 +78,25 @@ export default function ProcessingContent() {
         }
       } catch (error) {
         console.error("Erro ao verificar status:", error);
+      } finally {
+        isFetching = false;
       }
     };
 
-    const interval = setInterval(checkPaymentStatus, 5000);
-    return () => clearInterval(interval);
-  }, [router, orderId]);
+    // Intervalo de 10s (era 5s) — reduz pela metade as consultas ao banco
+    const interval = setInterval(checkPaymentStatus, 10000);
+
+    // Ao voltar para a aba, verifica imediatamente (compensa o intervalo maior)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") checkPaymentStatus();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [router, orderId, expiresAt]);
 
   const handleCopyPix = async () => {
     try {

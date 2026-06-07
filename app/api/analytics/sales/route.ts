@@ -99,13 +99,16 @@ export async function GET(request: Request) {
       },
     });
 
-    // Métricas de todo o período (sem filtro de data) para os cards de resumo
-    const allTimeOrders = await prisma.order.findMany({
+    // Métricas de todo o período (sem filtro de data) para os cards de resumo.
+    // aggregate() calcula count+sum no Postgres e devolve só 2 números,
+    // em vez de trazer todas as linhas para o Node (escala melhor e gasta menos compute).
+    const allTimeAgg = await prisma.order.aggregate({
       where: { status: "paid" },
-      select: { amount: true },
+      _count: { _all: true },
+      _sum: { amount: true },
     });
-    const allTimeTotalSales = allTimeOrders.length;
-    const allTimeTotalRevenue = allTimeOrders.reduce((sum, o) => sum + o.amount, 0);
+    const allTimeTotalSales = allTimeAgg._count._all;
+    const allTimeTotalRevenue = allTimeAgg._sum.amount ?? 0;
     const allTimeAverageTicket = allTimeTotalSales > 0 ? allTimeTotalRevenue / allTimeTotalSales : 0;
 
     // Processar dados para métricas do período selecionado
