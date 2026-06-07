@@ -106,6 +106,20 @@ export async function GET(
       }
     }
 
+    // Número real de parcelas: prioriza o pagarmeResponse (o que foi de fato
+    // cobrado), com fallback para a coluna. Cobre pedidos antigos cuja coluna
+    // installments ficou no default 1.
+    let installments = order.installments;
+    try {
+      const resp = order.pagarmeResponse as any;
+      const fromPagarme = resp?.charges?.[0]?.last_transaction?.installments;
+      if (typeof fromPagarme === "number" && fromPagarme > 0) {
+        installments = fromPagarme;
+      }
+    } catch {
+      // mantém o valor da coluna em caso de erro de parse
+    }
+
     // Formatar os dados para o frontend
     const formattedOrder = {
       id: order.id,
@@ -139,7 +153,7 @@ export async function GET(
       paymentMethod: order.paymentMethod as "credit_card" | "pix",
       status: order.status as "pending" | "paid" | "failed" | "refunded",
       amount: order.amount,
-      installments: order.installments,
+      installments,
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
       pagarmeTransactionId: order.pagarmeTransactionId || undefined,

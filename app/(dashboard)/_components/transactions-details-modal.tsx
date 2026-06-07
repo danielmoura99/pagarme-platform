@@ -592,17 +592,6 @@ export function TransactionDetailsModal({
                   {formatCurrency(transaction.amount)}
                 </p>
               </div>
-              {transaction.installments && transaction.installments > 1 && (
-                <div>
-                  <h3 className="text-sm font-medium mb-1">Parcelamento</h3>
-                  <p className="text-sm">
-                    {transaction.installments}x de{" "}
-                    {formatCurrency(
-                      transaction.amount / transaction.installments
-                    )}
-                  </p>
-                </div>
-              )}
               {transaction.coupon && (
                 <div>
                   <h3 className="text-sm font-medium mb-1">Cupom</h3>
@@ -614,6 +603,17 @@ export function TransactionDetailsModal({
                       {transaction.coupon.discountPercentage}% off
                     </span>
                   </div>
+                </div>
+              )}
+              {transaction.installments && transaction.installments > 1 && (
+                <div>
+                  <h3 className="text-sm font-medium mb-1">Parcelamento</h3>
+                  <p className="text-sm">
+                    {transaction.installments}x de{" "}
+                    {formatCurrency(
+                      transaction.amount / transaction.installments
+                    )}
+                  </p>
                 </div>
               )}
               {transaction.pagarmeTransactionId && (
