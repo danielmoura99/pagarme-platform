@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { SplitRule } from "@/types/pagarme";
 import { z } from "zod";
 import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { calculateInstallments } from "@/app/(checkout)/_utils/installments";
 
 export const dynamic = "force-dynamic";
 
@@ -458,13 +459,28 @@ export async function POST(request: Request) {
     // 5. Criar transação na Pagar.me
     let transaction: any = null;
     let pagarmeResponse = null;
-    const amount = await computeServerAmount(
+
+    // Valor base (produto + bumps − cupom), calculado no servidor
+    const baseAmount = await computeServerAmount(
       dbProduct.prices[0].amount,
       selectedBumps,
       product.id,
       dbCoupon?.discountPercentage ?? null,
     );
-    console.log(`[CHECKOUT] Valor calculado no servidor: ${amount} centavos (cliente enviou: ${parsed.data.totalAmount ?? "não enviado"})`);
+
+    // Juros de parcelamento (somente cartão, > 1x). Reutiliza a MESMA regra
+    // do checkout (calculateInstallments) para garantir que o valor cobrado
+    // seja idêntico ao exibido ao cliente. PIX e 1x não têm juros.
+    const installments = parsed.data.installments ?? 1;
+    let amount = baseAmount;
+    if (paymentMethod === "credit_card" && installments > 1) {
+      const options = calculateInstallments(baseAmount / 100);
+      amount = Math.round(options[installments - 1].total * 100);
+    }
+
+    console.log(
+      `[CHECKOUT] Valor: base=${baseAmount} parcelas=${installments} cobrado=${amount} centavos (cliente enviou: ${parsed.data.totalAmount ?? "n/a"})`
+    );
 
 
     let orderBumpsInfo = null;
@@ -534,7 +550,7 @@ export async function POST(request: Request) {
             exp_year: parseInt(`20${expYear}`),
             cvv: cardData.cardCvv,
           },
-          installments: parsed.data.installments,
+          installments,
           metadata: {
             ...metadata,
             product_name: dbProduct.name,

@@ -32,7 +32,9 @@
       "Bash(node -e \"console.log\\(require\\(''e:/pagarme-platform/node_modules/next-auth/package.json''\\).version\\)\")",
       "PowerShell(npx tsc --noEmit 2>&1)",
       "Bash(node -e ' *)",
-      "PowerShell(npm run build 2>&1)"
+      "PowerShell(npm run build 2>&1)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(node --import tsx -e ' *)"
     ],
     "deny": [],
     "ask": []
