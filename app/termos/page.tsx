@@ -186,44 +186,58 @@ export default function TermsPage() {
                   Termo de Reconhecimento e Aceitação de Compra
                 </h2>
                 <p className="text-gray-700 mb-3">
-                  Ao realizar a compra, declaro para os devidos fins legais que
-                  reconheço a legitimidade da transação efetuada junto à
-                  empresa, confirmando que a aquisição ocorreu por decisão
-                  própria, sem qualquer tipo de pressão ou indução fraudulenta.
+                  Ao concluir a compra, declaro que li, compreendi e aceitei as
+                  condições comerciais apresentadas antes da contratação,
+                  incluindo descrição do produto/serviço, preço, forma de
+                  pagamento, prazo de acesso, regras de utilização, política de
+                  reembolso e canais de atendimento.
                 </p>
                 <p className="text-gray-700 mb-3">
-                  Declaro ainda não existir qualquer irregularidade que
-                  justifique solicitação de estorno ou Chargeback da compra
-                  efetuada.
+                  Declaro que a contratação foi realizada por minha livre
+                  iniciativa, mediante o uso dos meus próprios dados cadastrais e
+                  meio de pagamento autorizado, reconhecendo a legitimidade da
+                  transação, salvo em caso de comprovação de fraude, erro,
+                  cobrança indevida ou outro vício legalmente reconhecido.
                 </p>
                 <p className="text-gray-700 mb-3">
-                  Reconheço expressamente que a empresa não praticou atos
-                  fraudulentos ou ilícitos relacionados às transações em
-                  questão, estando plenamente ciente e concordando com as
-                  condições da compra.
+                  Estou ciente de que, por se tratar de produto/serviço digital,
+                  a empresa poderá registrar evidências técnicas relacionadas à
+                  contratação e à utilização do serviço, incluindo, quando
+                  aplicável, data e hora de compra, dados cadastrais informados,
+                  confirmação de pagamento, IP de acesso, login na plataforma,
+                  ativação de conta, consumo de conteúdo, início de avaliação,
+                  emissão de relatório, interações realizadas e demais registros
+                  necessários à comprovação da entrega e utilização do serviço.
                 </p>
                 <p className="text-gray-700 mb-3">
-                  Assumo integral responsabilidade sobre a aquisição realizada e
-                  renuncio explicitamente ao direito de solicitar Chargeback ou
-                  reembolso posterior caso o serviço já tenha sido iniciado ou
-                  utilizado.
+                  Reconheço que a solicitação de reembolso, cancelamento ou
+                  contestação de pagamento após o início efetivo da utilização
+                  do serviço poderá ser analisada com base na política de
+                  reembolso, nos registros de uso e na legislação aplicável, sem
+                  prejuízo dos direitos assegurados ao consumidor em caso de
+                  falha na prestação do serviço, vício, defeito, indisponibilidade
+                  injustificada, cobrança indevida ou divergência relevante entre
+                  a oferta e o serviço entregue.
                 </p>
                 <p className="text-gray-700 mb-3">
-                  Autorizo, em caso de inadimplência, o registro de protesto até
-                  a regularização da pendência financeira.
+                  Em caso de contestação administrativa, chargeback ou
+                  solicitação de estorno, autorizo que a empresa apresente às
+                  instituições envolvidas na transação os documentos e registros
+                  técnicos necessários à comprovação da contratação, autorização
+                  de pagamento, entrega, acesso e utilização do serviço,
+                  respeitada a legislação de proteção de dados aplicável.
                 </p>
                 <p className="text-gray-700 mb-3">
-                  Estou ciente de que, caso venha a solicitar Chargeback após
-                  utilizar o serviço contratado, será registrado um Boletim de
-                  Ocorrência, considerando que há registros e provas da
-                  contratação e do uso efetivo do serviço adquirido, incluindo
-                  mensagens trocadas e relatórios detalhados.
+                  A utilização indevida dos mecanismos de contestação de
+                  pagamento, mediante informações falsas, omissão relevante ou
+                  tentativa de obtenção de vantagem indevida após a efetiva
+                  contratação e utilização do serviço, poderá sujeitar o
+                  responsável às medidas administrativas, extrajudiciais e
+                  judiciais cabíveis, conforme a legislação aplicável.
                 </p>
                 <p className="text-gray-700 mb-3">
-                  Alertamos que tais práticas podem ser enquadradas como crime
-                  de estelionato, conforme art. 171 do Código Penal, sendo todos
-                  os documentos entregues às autoridades competentes para as
-                  devidas providências legais.
+                  Este termo não limita, restringe ou exclui direitos legalmente
+                  assegurados ao consumidor.
                 </p>
               </section>
 
@@ -232,17 +246,40 @@ export default function TermsPage() {
                   Política de Reembolso
                 </h2>
                 <p className="text-gray-700">
-                  Em conformidade com o Código de Defesa do Consumidor (CDC),
-                  oferecemos o prazo legal de 7 (sete) dias para solicitação de
-                  reembolso após a aquisição do serviço, desde que o serviço não
-                  tenha sido iniciado ou utilizado. De acordo com o artigo 49 do
-                  CDC, o direito ao arrependimento aplica-se exclusivamente a
-                  serviços não utilizados ou não iniciados. Caso seja constatada
-                  a utilização, interação ou início efetivo do produto digital
-                  adquirido, fica descaracterizado o direito ao arrependimento,
-                  não sendo devido o reembolso. Em casos de contestação, serão
-                  disponibilizadas evidências documentais dessa interação,
-                  amparando a negativa do pedido e o respaldo jurídico.
+                  Nos termos do Código de Defesa do Consumidor, o cliente poderá
+                  solicitar o cancelamento da compra no prazo de até 7 (sete)
+                  dias corridos contados da contratação ou da disponibilização
+                  do serviço, quando aplicável às contratações realizadas fora
+                  do estabelecimento comercial.
+                </p>
+                <p className="text-gray-700 mt-4">
+                  Por se tratar de produto/serviço digital com disponibilização
+                  imediata de acesso, a solicitação de reembolso poderá ser
+                  analisada considerando a efetiva utilização do serviço,
+                  incluindo, mas não se limitando a: ativação de conta, acesso à
+                  plataforma, consumo de conteúdo, início de avaliação, emissão
+                  de relatório, uso de funcionalidades, interação com
+                  ferramentas digitais ou qualquer outro registro técnico que
+                  demonstre início efetivo da prestação.
+                </p>
+                <p className="text-gray-700 mt-4">
+                  Caso seja constatado uso relevante ou consumo efetivo do
+                  produto/serviço digital, a empresa poderá negar o reembolso,
+                  desde que não haja falha na prestação do serviço,
+                  indisponibilidade injustificada, vício, defeito ou divergência
+                  relevante entre o serviço entregue e a oferta apresentada.
+                </p>
+                <p className="text-gray-700 mt-4">
+                  Em caso de contestação, poderão ser utilizados registros
+                  técnicos e documentais, como data e hora de acesso, logs de
+                  utilização, IP, eventos de navegação, histórico de ativação,
+                  consumo de conteúdo e demais evidências relacionadas à
+                  prestação do serviço.
+                </p>
+                <p className="text-gray-700 mt-4">
+                  Esta política não limita os direitos legais do consumidor em
+                  caso de vício, defeito, cobrança indevida, indisponibilidade
+                  do serviço ou descumprimento da oferta.
                 </p>
               </section>
             </div>
