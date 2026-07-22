@@ -393,7 +393,8 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
 
       switch (pixel.platform) {
         case "facebook":
-          trackFacebookEvent(eventName, eventData);
+          // eventData.orderId (presente no Purchase) vira o eventID → dedup com a CAPI
+          trackFacebookEvent(eventName, eventData, eventData?.orderId);
           break;
 
         case "google_ads":

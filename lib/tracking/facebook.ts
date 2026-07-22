@@ -49,9 +49,16 @@ export function loadFacebookPixel(pixelId: string) {
 
 export function trackFacebookEvent(
   eventName: string,
-  data?: Record<string, any>
+  data?: Record<string, any>,
+  eventID?: string
 ) {
   if (typeof window !== "undefined" && window.fbq) {
-    window.fbq("track", eventName, data);
+    // eventID permite que a Meta deduplique este evento do browser com o
+    // mesmo evento enviado via Conversions API (server-side).
+    if (eventID) {
+      window.fbq("track", eventName, data, { eventID });
+    } else {
+      window.fbq("track", eventName, data);
+    }
   }
 }

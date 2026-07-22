@@ -426,6 +426,10 @@ model FacebookAdsConfig {
   adAccountId     String?   // formato: act_XXXXXXX
   adAccountName   String?
 
+  // Conversions API (envio server-side de conversões para a Meta)
+  capiAccessToken   String?   @db.Text  // token da CAPI (distinto do token de leitura de insights)
+  capiTestEventCode String?              // código de teste opcional (aba "Test Events")
+
   // Sincronização
   autoSync        Boolean   @default(true)
   syncInterval    Int       @default(360)  // minutos

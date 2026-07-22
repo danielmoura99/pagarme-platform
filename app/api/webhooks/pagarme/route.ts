@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import crypto from "crypto";
+import { sendMetaPurchaseEvent } from "@/lib/tracking/meta-capi";
 
 // Verificar assinatura HMAC do webhook Pagar.me
 function verifyWebhookSignature(body: string, signature: string | null, secret: string): boolean {
@@ -411,6 +412,14 @@ async function createPurchasePixelEvents(orderId: string) {
       return;
     }
 
+    // Config central da Conversions API (token único por conta Meta),
+    // gerenciada na página de Integrações. Fallback opcional para env.
+    const fbConfig = await prisma.facebookAdsConfig.findFirst({
+      select: { capiAccessToken: true, capiTestEventCode: true },
+    });
+    const capiToken = fbConfig?.capiAccessToken || process.env.META_CAPI_ACCESS_TOKEN;
+    const capiTestCode = fbConfig?.capiTestEventCode || process.env.META_CAPI_TEST_EVENT_CODE;
+
     for (const item of order.items) {
       for (const pixelConfig of item.product.pixelConfigs) {
         // Deduplicar: só criar se ainda não existir Purchase para este orderId + pixelConfig
@@ -454,6 +463,52 @@ async function createPurchasePixelEvents(orderId: string) {
         console.log(
           `[PIXEL_SERVER_SIDE] Purchase criado — pixelConfig=${pixelConfig.id} orderId=${order.id} source=${order.utmSource}`
         );
+
+        // ✅ Meta Conversions API (server-side): envia o Purchase direto à Meta.
+        // Garante que compras que não chegam no /success (ex: PIX, aba fechada)
+        // sejam reportadas. event_id = order.id → a Meta deduplica com o pixel do browser.
+        if (pixelConfig.platform === "facebook") {
+          if (capiToken) {
+            const fullName = (order.customer?.name ?? "").trim();
+            const [firstName, ...rest] = fullName.split(/\s+/);
+            const testEventCode = pixelConfig.testMode ? capiTestCode : undefined;
+
+            const result = await sendMetaPurchaseEvent({
+              pixelId: pixelConfig.pixelId,
+              accessToken: capiToken,
+              testEventCode,
+              eventId: order.id,
+              eventSourceUrl: order.landingPage || undefined,
+              userData: {
+                email: order.customer?.email,
+                phone: order.customer?.phone,
+                firstName: firstName || undefined,
+                lastName: rest.join(" ") || undefined,
+              },
+              customData: {
+                value: order.amount / 100,
+                currency: "BRL",
+                contentIds: [item.productId],
+                contentName: item.product.name,
+                numItems: 1,
+              },
+            });
+
+            if (result.success) {
+              console.log(
+                `[META_CAPI] Purchase enviado — pixel=${pixelConfig.pixelId} order=${order.id}`
+              );
+            } else {
+              console.error(
+                `[META_CAPI_ERROR] pixel=${pixelConfig.pixelId} order=${order.id}: ${result.error}`
+              );
+            }
+          } else {
+            console.warn(
+              "[META_CAPI] Token da Conversions API não configurado (Integrações → Facebook Ads) — envio server-side ignorado"
+            );
+          }
+        }
       }
     }
   } catch (error) {

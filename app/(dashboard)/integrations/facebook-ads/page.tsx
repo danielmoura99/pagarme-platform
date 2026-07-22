@@ -24,6 +24,8 @@ interface Config {
   adAccountName: string | null;
   lastSyncAt: string | null;
   tokenExpired: boolean;
+  hasCapiToken?: boolean;
+  capiTestEventCode?: string | null;
 }
 
 interface AdAccount {
@@ -54,6 +56,11 @@ export default function FacebookAdsPage() {
   const [tokenInput, setTokenInput] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Conversions API (CAPI)
+  const [capiToken, setCapiToken] = useState("");
+  const [capiTestCode, setCapiTestCode] = useState("");
+  const [savingCapi, setSavingCapi] = useState(false);
+
   useEffect(() => {
     fetchConfig();
     fetchLogs();
@@ -65,6 +72,7 @@ export default function FacebookAdsPage() {
       const res = await fetch("/api/integrations/facebook-ads/config");
       const data = await res.json();
       setConfig(data);
+      setCapiTestCode(data.capiTestEventCode || "");
 
       if (data.connected) {
         const accRes = await fetch("/api/integrations/facebook-ads/accounts");
@@ -105,6 +113,31 @@ export default function FacebookAdsPage() {
       setMessage({ type: "error", text: e instanceof Error ? e.message : "Erro ao salvar token" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveCapi = async () => {
+    setSavingCapi(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/integrations/facebook-ads/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // token só é enviado se preenchido (em branco mantém o atual)
+          ...(capiToken.trim() ? { capiAccessToken: capiToken.trim() } : {}),
+          capiTestEventCode: capiTestCode.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Erro ao salvar");
+      setCapiToken("");
+      setMessage({ type: "success", text: "Conversions API salva com sucesso." });
+      fetchConfig();
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "Erro ao salvar CAPI" });
+    } finally {
+      setSavingCapi(false);
     }
   };
 
@@ -322,6 +355,88 @@ export default function FacebookAdsPage() {
               )}
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Conversions API (envio server-side de conversões) */}
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <CardTitle className="text-base">Conversions API (CAPI)</CardTitle>
+          <Badge
+            variant={config?.hasCapiToken ? "default" : "secondary"}
+            className={config?.hasCapiToken ? "bg-green-600" : ""}
+          >
+            {config?.hasCapiToken ? "Configurada" : "Não configurada"}
+          </Badge>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 space-y-2">
+            <p className="font-semibold">
+              Envia as compras para a Meta pelo servidor
+            </p>
+            <p className="text-blue-800">
+              Garante que vendas que não voltam à página de sucesso (ex: PIX,
+              aba fechada) sejam reportadas. O evento é deduplicado com o pixel
+              do navegador.
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-blue-800">
+              <li>Abra o <strong>Events Manager</strong> e selecione seu Pixel</li>
+              <li>Vá em <strong>Configurações → Conversions API</strong></li>
+              <li>Clique em <strong>Gerar token de acesso</strong> e cole abaixo</li>
+            </ol>
+            <a
+              href="https://business.facebook.com/events_manager2/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-blue-700 underline text-xs mt-1"
+            >
+              Abrir Events Manager <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Token da Conversions API</label>
+            <Input
+              type="password"
+              autoComplete="off"
+              placeholder={
+                config?.hasCapiToken
+                  ? "•••••••• (token salvo — deixe em branco para manter)"
+                  : "Cole o token da CAPI aqui..."
+              }
+              value={capiToken}
+              onChange={(e) => setCapiToken(e.target.value)}
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              {config?.hasCapiToken
+                ? "Já existe um token salvo. Preencha apenas para substituí-lo."
+                : "Este token é diferente do token de leitura de insights acima."}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              Test Event Code (opcional)
+            </label>
+            <Input
+              placeholder="Ex: TEST12345"
+              value={capiTestCode}
+              onChange={(e) => setCapiTestCode(e.target.value)}
+              className="font-mono text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              Usado junto do Modo Teste do pixel: os eventos aparecem só na aba
+              &quot;Test Events&quot; e não contam como conversão real.
+            </p>
+          </div>
+
+          <Button
+            onClick={handleSaveCapi}
+            disabled={savingCapi || (!capiToken.trim() && !config?.hasCapiToken)}
+          >
+            {savingCapi ? "Salvando..." : "Salvar Conversions API"}
+          </Button>
         </CardContent>
       </Card>
 

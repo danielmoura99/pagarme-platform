@@ -23,6 +23,8 @@ export async function GET() {
         adAccountName: null,
         lastSyncAt: null,
         tokenExpired: false,
+        hasCapiToken: false,
+        capiTestEventCode: null,
       });
     }
 
@@ -35,6 +37,9 @@ export async function GET() {
       tokenExpired: false,
       autoSync: config.autoSync,
       syncInterval: config.syncInterval,
+      // Conversions API — nunca retornamos o token, só se existe + o test code
+      hasCapiToken: !!config.capiAccessToken,
+      capiTestEventCode: config.capiTestEventCode ?? null,
     });
   } catch (error) {
     console.error("[FB_ADS_CONFIG_GET_ERROR]", error);
@@ -50,9 +55,36 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { accessToken, adAccountId, adAccountName, autoSync, syncInterval } = body;
+    const {
+      accessToken,
+      adAccountId,
+      adAccountName,
+      autoSync,
+      syncInterval,
+      capiAccessToken,
+      capiTestEventCode,
+    } = body;
 
     const existing = await prisma.facebookAdsConfig.findFirst();
+
+    // Salvar token da Conversions API (independe do token de leitura de insights).
+    // Cria a linha de config se ainda não existir — permite usar CAPI mesmo
+    // sem ter conectado a Marketing API.
+    if (capiAccessToken !== undefined || capiTestEventCode !== undefined) {
+      const data: { capiAccessToken?: string; capiTestEventCode?: string | null } = {};
+      // Só sobrescreve o token se vier valor não-vazio (em branco mantém o atual)
+      if (capiAccessToken) data.capiAccessToken = capiAccessToken;
+      if (capiTestEventCode !== undefined) {
+        data.capiTestEventCode = capiTestEventCode || null;
+      }
+
+      if (existing) {
+        await prisma.facebookAdsConfig.update({ where: { id: existing.id }, data });
+      } else {
+        await prisma.facebookAdsConfig.create({ data });
+      }
+      return NextResponse.json({ success: true });
+    }
 
     // Salvar System User Token — valida na API antes de salvar
     if (accessToken) {
