@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/checkout/route.ts
 import { NextResponse } from "next/server";
-import { pagarme } from "@/lib/pagarme";
+import { pagarme, selectLastTransaction } from "@/lib/pagarme";
 import { prisma } from "@/lib/db";
 import { SplitRule } from "@/types/pagarme";
 import { z } from "zod";
@@ -319,7 +319,7 @@ export async function POST(request: Request) {
             parsedResponse = {};
           }
 
-          const pixData = parsedResponse?.charges?.[0]?.last_transaction;
+          const pixData = selectLastTransaction(parsedResponse);
 
           return NextResponse.json({
             success: true,
@@ -862,7 +862,7 @@ export async function POST(request: Request) {
 
     // 8. Retornar resposta apropriada
     if (paymentMethod === "pix") {
-      const pixData = transaction.charges?.[0]?.last_transaction;
+      const pixData = selectLastTransaction(transaction);
 
       if (!pixData?.qr_code || !pixData?.qr_code_url) {
         throw new Error("QR Code PIX não gerado");

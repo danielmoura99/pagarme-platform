@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
+import { selectCharge, selectLastTransaction } from "@/lib/pagarme";
 
 export const dynamic = "force-dynamic";
 
@@ -60,8 +61,8 @@ export async function GET(
         const pagarmeData = order.pagarmeResponse as any;
 
         // Tentar extrair detalhes mais específicos da falha
-        if (pagarmeData.charges && pagarmeData.charges[0]) {
-          const charge = pagarmeData.charges[0];
+        const charge = selectCharge(pagarmeData);
+        if (charge) {
           const transaction = charge.last_transaction;
 
           if (transaction) {
@@ -111,8 +112,7 @@ export async function GET(
     // installments ficou no default 1.
     let installments = order.installments;
     try {
-      const resp = order.pagarmeResponse as any;
-      const fromPagarme = resp?.charges?.[0]?.last_transaction?.installments;
+      const fromPagarme = selectLastTransaction(order.pagarmeResponse)?.installments;
       if (typeof fromPagarme === "number" && fromPagarme > 0) {
         installments = fromPagarme;
       }

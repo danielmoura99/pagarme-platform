@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import crypto from "crypto";
 import { sendMetaPurchaseEvent } from "@/lib/tracking/meta-capi";
+import { selectCharge } from "@/lib/pagarme";
 
 // Verificar assinatura HMAC do webhook Pagar.me
 function verifyWebhookSignature(body: string, signature: string | null, secret: string): boolean {
@@ -194,8 +195,8 @@ async function handleOrderFailed(data: any) {
     let failureCode = "UNKNOWN";
 
     // Tentar extrair o motivo da falha da resposta da Pagar.me
-    if (data.charges && data.charges[0]) {
-      const charge = data.charges[0];
+    const charge = selectCharge(data);
+    if (charge) {
       const transaction = charge.last_transaction;
 
       if (transaction) {

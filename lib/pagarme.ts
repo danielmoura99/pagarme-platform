@@ -15,8 +15,46 @@ import crypto from "crypto";
 
 const PAGARME_SECRET_KEY = process.env.PAGARME_SECRET_KEY;
 const PAGARME_WEBHOOK_SECRET = process.env.PAGARME_WEBHOOK_SECRET;
-const PAGARME_API_URL = "https://api.pagar.me/core/v5";
+// Configurável para permitir testes no sandbox da Pagar.me/Stone
+// (ex: https://sdx-api.pagar.me/core/v5). Sem a env, usa produção.
+const PAGARME_API_URL =
+  process.env.PAGARME_API_URL || "https://api.pagar.me/core/v5";
+// No sandbox, respostas mockadas das mudanças de API exigem este header.
+const PAGARME_USE_MOCKS = process.env.PAGARME_USE_MOCKS === "true";
 const PAGARME_PUBLIC_KEY = process.env.PAGARME_PUBLIC_KEY;
+
+/**
+ * Seleciona a charge relevante de uma order da Pagar.me.
+ *
+ * A partir das mudanças de API (ago/2026), uma order pode ter MÚLTIPLAS charges:
+ * um reprocessamento após falha de antifraude gera uma nova charge dentro da
+ * mesma order. Assumir `charges[0]` passa a ler a tentativa errada.
+ *
+ * Critério: a charge paga tem prioridade; na ausência dela, a mais recente.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectCharge(order: any): any | null {
+  const charges = order?.charges;
+  if (!Array.isArray(charges) || charges.length === 0) return null;
+  if (charges.length === 1) return charges[0];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const paid = charges.filter((c: any) => c?.status === "paid");
+  const pool = paid.length > 0 ? paid : charges;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return pool.reduce((latest: any, c: any) => {
+    const current = new Date(c?.created_at ?? 0).getTime();
+    const best = new Date(latest?.created_at ?? 0).getTime();
+    return current > best ? c : latest;
+  }, pool[0]);
+}
+
+/** Atalho para a last_transaction da charge relevante. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function selectLastTransaction(order: any): any | null {
+  return selectCharge(order)?.last_transaction ?? null;
+}
 
 export class PagarmeClient {
   private headers: HeadersInit;
@@ -33,6 +71,7 @@ export class PagarmeClient {
         "base64"
       )}`,
       "Content-Type": "application/json",
+      ...(PAGARME_USE_MOCKS ? { "X-Use-Mocks": "true" } : {}),
     };
   }
 
@@ -178,7 +217,7 @@ export class PagarmeClient {
 
     // Log da resposta completa
     // Verificar se temos os dados do PIX
-    const pixData = transaction.charges?.[0]?.last_transaction;
+    const pixData = selectLastTransaction(transaction);
     if (!pixData?.qr_code || !pixData?.qr_code_url) {
       throw new Error("Dados do PIX não gerados corretamente");
     }
