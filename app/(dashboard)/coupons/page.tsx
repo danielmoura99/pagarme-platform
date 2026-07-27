@@ -3,6 +3,9 @@ import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { CouponClient } from "./_components/client";
 
+// Consulta o banco a cada acesso — não pode ser prerenderizada em build time.
+export const dynamic = "force-dynamic";
+
 export default async function CouponsPage() {
   const coupons = await prisma.coupon.findMany({
     orderBy: {

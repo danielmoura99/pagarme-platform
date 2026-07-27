@@ -3,6 +3,9 @@ import { ProductClient } from "./_components/client";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 
+// Consulta o banco a cada acesso — não pode ser prerenderizada em build time.
+export const dynamic = "force-dynamic";
+
 export default async function ProductsPage() {
   const products = await prisma.product.findMany({
     include: {

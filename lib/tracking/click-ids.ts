@@ -25,6 +25,28 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+/**
+ * Extrai o click id dos cookies do Google (_gcl_aw / _gcl_gb).
+ *
+ * Formato: "GCL.<timestamp>.<click_id>".
+ *
+ * Por que isso importa: a landing page (thprop.com.br) e o checkout
+ * (checkout.tradershouse.com.br) são domínios diferentes, então o gclid da URL
+ * não atravessa sozinho — nem via storage, que é isolado por origem. O
+ * cross-domain linking do Google (parâmetro "_gl" na URL) transfere estes
+ * cookies entre os domínios, então lê-los é uma reserva confiável para quando
+ * o gclid não vier explícito na URL do checkout.
+ */
+function parseGclCookie(raw: string | null): string | null {
+  if (!raw) return null;
+  const parts = raw.split(".");
+  // Precisa ter ao menos GCL + timestamp + valor
+  if (parts.length < 3) return null;
+  // O click id pode conter pontos — junta tudo a partir da terceira posição
+  const value = parts.slice(2).join(".");
+  return value || null;
+}
+
 /** Lê os click IDs da URL atual e persiste. Chamar no carregamento da página. */
 export function persistClickIds(): void {
   if (typeof window === "undefined") return;
@@ -64,6 +86,12 @@ export function getClickIds(): ClickIds {
         window.localStorage.getItem(`${key}_backup`) ||
         null;
     }
+
+    // Reserva do Google: se o click id não veio na URL nem ficou salvo
+    // (caso típico de origem em outro domínio), busca nos cookies que o
+    // cross-domain linking do Google transfere.
+    if (!result.gclid) result.gclid = parseGclCookie(readCookie("_gcl_aw"));
+    if (!result.gbraid) result.gbraid = parseGclCookie(readCookie("_gcl_gb"));
 
     // Meta: _fbp/_fbc são cookies criados pelo próprio pixel.
     result.fbp = readCookie("_fbp");
