@@ -29,6 +29,21 @@ const integrations = [
     setupUrl: "/integrations/facebook-ads"
   },
   {
+    id: "google-ads",
+    name: "Google Ads",
+    description: "Envie conversões ao Google Ads pelo servidor para otimizar campanhas",
+    logo: "🔍",
+    status: "available",
+    category: "Mídia Paga",
+    features: [
+      "Importação de conversões offline (gclid)",
+      "Registra vendas que o navegador não reporta",
+      "Enhanced conversions com dados first-party",
+      "Deduplicação pelo ID do pedido"
+    ],
+    setupUrl: "/integrations/google-ads"
+  },
+  {
     id: "rd-station",
     name: "RD Station",
     description: "Plataforma de marketing digital e automação de leads",

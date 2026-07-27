@@ -169,6 +169,15 @@ model Order {
   referrer          String?   // URL de referência
   landingPage       String?   // Primeira página da sessão
 
+  // Click IDs — necessários para conversões server-side (offline conversion import)
+  gclid             String?   // Google Ads click id
+  gbraid            String?   // Google: clique web → app iOS
+  wbraid            String?   // Google: clique app iOS → web
+  fbp               String?   // Meta browser id (cookie _fbp)
+  fbc               String?   // Meta click id (cookie _fbc, derivado do fbclid)
+
+  @@index([gclid])
+
   @@index([checkoutId])
   @@index([status])
   @@index([createdAt])
@@ -441,6 +450,36 @@ model FacebookAdsConfig {
   syncLogs        FacebookAdsSyncLog[]
 
   @@map("facebook_ads_config")
+}
+
+// ===== INTEGRAÇÃO GOOGLE ADS =====
+
+// Credenciais da API do Google Ads (conta única, gerenciada em Integrações).
+// Usada para importar conversões offline (equivalente ao CAPI da Meta).
+model GoogleAdsConfig {
+  id                 String   @id @default(cuid())
+  enabled            Boolean  @default(false)
+
+  // Credenciais da API
+  developerToken     String?  @db.Text
+  clientId           String?  @db.Text
+  clientSecret       String?  @db.Text
+  refreshToken       String?  @db.Text
+
+  // Conta
+  customerId         String?  // somente dígitos, sem hífens
+  loginCustomerId    String?  // conta gerenciadora (MCC), quando aplicável
+  customerName       String?
+
+  // Conversão
+  conversionActionId String?  // ID numérico da conversion action (upload de cliques)
+
+  lastUploadAt       DateTime?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("google_ads_config")
 }
 
 // Dados de campanhas importados da Marketing API

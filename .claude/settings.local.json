@@ -34,7 +34,11 @@
       "Bash(node -e ' *)",
       "PowerShell(npm run build 2>&1)",
       "Bash(npx tsx -e ' *)",
-      "Bash(node --import tsx -e ' *)"
+      "Bash(node --import tsx -e ' *)",
+      "WebFetch(domain:developers.google.com)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsx *)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

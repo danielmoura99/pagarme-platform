@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import crypto from "crypto";
 import { sendMetaPurchaseEvent } from "@/lib/tracking/meta-capi";
 import { selectCharge } from "@/lib/pagarme";
+import { uploadClickConversion } from "@/lib/tracking/google-ads-api";
 
 // Verificar assinatura HMAC do webhook Pagar.me
 function verifyWebhookSignature(body: string, signature: string | null, secret: string): boolean {
@@ -485,6 +486,9 @@ async function createPurchasePixelEvents(orderId: string) {
                 phone: order.customer?.phone,
                 firstName: firstName || undefined,
                 lastName: rest.join(" ") || undefined,
+                // Melhoram a atribuição a nível de anúncio
+                fbp: order.fbp,
+                fbc: order.fbc,
               },
               customData: {
                 value: order.amount / 100,
@@ -512,8 +516,76 @@ async function createPurchasePixelEvents(orderId: string) {
         }
       }
     }
+
+    // ✅ Google Ads: importação de conversão offline.
+    // Diferente da Meta, roda UMA vez por pedido (a conversion action é única
+    // por conta, e o orderId garante a deduplicação do lado do Google).
+    await uploadGoogleAdsConversion(order);
   } catch (error) {
     // Não relançar — falha no pixel não pode derrubar o webhook
     console.error("[PIXEL_SERVER_SIDE_ERROR] Erro ao criar Purchase events:", error);
+  }
+}
+
+// Envia a conversão para o Google Ads. Silencioso quando não configurado
+// ou quando o pedido não veio de um clique em anúncio (sem gclid).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function uploadGoogleAdsConversion(order: any) {
+  try {
+    // Sem click id não há conversão importável — sai cedo, sem consultar config.
+    if (!order.gclid && !order.gbraid && !order.wbraid) return;
+
+    const config = await prisma.googleAdsConfig.findFirst();
+    if (!config?.enabled) return;
+
+    if (
+      !config.developerToken ||
+      !config.clientId ||
+      !config.clientSecret ||
+      !config.refreshToken ||
+      !config.customerId ||
+      !config.conversionActionId
+    ) {
+      console.warn(
+        "[GOOGLE_ADS] Credenciais incompletas (Integrações → Google Ads) — upload ignorado"
+      );
+      return;
+    }
+
+    const result = await uploadClickConversion(
+      {
+        developerToken: config.developerToken,
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        refreshToken: config.refreshToken,
+        customerId: config.customerId,
+        loginCustomerId: config.loginCustomerId,
+        conversionActionId: config.conversionActionId,
+      },
+      {
+        gclid: order.gclid,
+        gbraid: order.gbraid,
+        wbraid: order.wbraid,
+        conversionDateTime: new Date(),
+        conversionValue: order.amount / 100,
+        currencyCode: "BRL",
+        orderId: order.id,
+        email: order.customer?.email,
+        phone: order.customer?.phone,
+      }
+    );
+
+    if (result.success) {
+      console.log(`[GOOGLE_ADS] Conversão enviada — order=${order.id}`);
+      await prisma.googleAdsConfig.update({
+        where: { id: config.id },
+        data: { lastUploadAt: new Date() },
+      });
+    } else if (!result.skipped) {
+      console.error(`[GOOGLE_ADS_ERROR] order=${order.id}: ${result.error}`);
+    }
+  } catch (error) {
+    // Nunca derruba o webhook
+    console.error("[GOOGLE_ADS_ERROR] Falha inesperada:", error);
   }
 }

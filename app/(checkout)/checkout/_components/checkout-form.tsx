@@ -23,6 +23,7 @@ import { Loader2, CreditCard, QrCode } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TermsModal } from "@/components/modals/terms-modal";
+import { persistClickIds, getClickIds } from "@/lib/tracking/click-ids";
 import { useRef } from "react";
 
 // Interfaces do Payload
@@ -131,6 +132,12 @@ export function CheckoutForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const checkoutIdRef = useRef<string>(crypto.randomUUID());
 
+  // Persiste os click IDs de anúncio (gclid etc) assim que a página carrega,
+  // antes que a navegação descarte os parâmetros da URL.
+  useEffect(() => {
+    persistClickIds();
+  }, []);
+
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: {
@@ -181,9 +188,27 @@ export function CheckoutForm({
   });
   const cardExpiryRef = useMask({ mask: "__/__", replacement: { _: /\d/ } });
 
-  // Captura UTMs do browser no momento do submit
-  const getUTMData = () => {
-    if (typeof window === "undefined") return {};
+  // Captura UTMs + click IDs do browser no momento do submit
+  const getUTMData = (): {
+    utmSource: string | null;
+    utmMedium: string | null;
+    utmCampaign: string | null;
+    utmTerm: string | null;
+    utmContent: string | null;
+    referrer: string | null;
+    landingPage: string | null;
+    gclid: string | null;
+    gbraid: string | null;
+    wbraid: string | null;
+    fbp: string | null;
+    fbc: string | null;
+  } => {
+    const empty = {
+      utmSource: null, utmMedium: null, utmCampaign: null, utmTerm: null,
+      utmContent: null, referrer: null, landingPage: null,
+      gclid: null, gbraid: null, wbraid: null, fbp: null, fbc: null,
+    };
+    if (typeof window === "undefined") return empty;
     const urlParams = new URLSearchParams(window.location.search);
     const ss = window.sessionStorage;
     const ls = window.localStorage;
@@ -195,6 +220,7 @@ export function CheckoutForm({
       utmContent:  urlParams.get("utm_content")  || ss.getItem("utm_content")  || null,
       referrer:    document.referrer             || null,
       landingPage: ss.getItem("landing_page")    || null,
+      ...getClickIds(),
     };
   };
 

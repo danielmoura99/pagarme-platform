@@ -42,6 +42,11 @@ const checkoutSchema = z.object({
   utmContent: z.string().max(500).optional().nullable(),
   referrer: z.string().max(2000).optional().nullable(),
   landingPage: z.string().max(2000).optional().nullable(),
+  gclid: z.string().max(500).optional().nullable(),
+  gbraid: z.string().max(500).optional().nullable(),
+  wbraid: z.string().max(500).optional().nullable(),
+  fbp: z.string().max(500).optional().nullable(),
+  fbc: z.string().max(500).optional().nullable(),
   installments: z.number().int().min(1).max(12).optional(),
   totalAmount: z.number().int().positive().optional(),
 });
@@ -282,6 +287,11 @@ export async function POST(request: Request) {
       utmContent   = null,
       referrer     = null,
       landingPage  = null,
+      gclid        = null,
+      gbraid       = null,
+      wbraid       = null,
+      fbp          = null,
+      fbc          = null,
     } = parsed.data;
 
     // Verificar se já existe uma transação com este checkoutId
@@ -746,6 +756,11 @@ export async function POST(request: Request) {
           utmContent,
           referrer,
           landingPage,
+          gclid,
+          gbraid,
+          wbraid,
+          fbp,
+          fbc,
           items: {
             create: {
               productId: dbProduct.id,
@@ -833,6 +848,11 @@ export async function POST(request: Request) {
       utmContent,
       referrer,
       landingPage,
+      gclid,
+      gbraid,
+      wbraid,
+      fbp,
+      fbc,
       items: {
         create: {
           productId: dbProduct.id,
