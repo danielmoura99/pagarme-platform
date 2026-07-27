@@ -476,10 +476,72 @@ model GoogleAdsConfig {
 
   lastUploadAt       DateTime?
 
+  // Sincronização de métricas de campanha
+  autoSync           Boolean  @default(true)
+  lastSyncAt         DateTime?
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  syncLogs           GoogleAdsSyncLog[]
+
   @@map("google_ads_config")
+}
+
+// Métricas de campanhas importadas da Google Ads API (granularidade diária)
+model GoogleAdsCampaignData {
+  id               String   @id @default(cuid())
+
+  campaignId       String
+  campaignName     String
+
+  dateStart        DateTime
+  dateEnd          DateTime
+
+  // Métricas vindas do Google
+  impressions      Int      @default(0)
+  clicks           Int      @default(0)
+  cost             Float    @default(0)  // em BRL (cost_micros / 1.000.000)
+  cpc              Float    @default(0)
+  cpm              Float    @default(0)
+  ctr              Float    @default(0)
+  // Conversões conforme o próprio Google (inclui as que enviamos via API)
+  googleConversions      Float @default(0)
+  googleConversionsValue Float @default(0)
+
+  // Métricas cruzadas com a tabela Order (fonte de verdade da receita)
+  purchases        Int      @default(0)
+  revenue          Float    @default(0)
+  roas             Float    @default(0)  // revenue / cost
+  cpa              Float    @default(0)  // cost / purchases
+
+  syncedAt         DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([campaignId, dateStart, dateEnd])
+  @@index([dateStart, dateEnd])
+  @@index([campaignName])
+  @@map("google_ads_campaign_data")
+}
+
+// Histórico de sincronizações
+model GoogleAdsSyncLog {
+  id           String   @id @default(cuid())
+  configId     String
+  config       GoogleAdsConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  status       String   // "success" | "error"
+  campaigns    Int      @default(0)
+  dateRange    String?
+  errorMessage String?
+  duration     Int?     // ms
+
+  createdAt    DateTime @default(now())
+
+  @@index([configId])
+  @@index([createdAt])
+  @@map("google_ads_sync_log")
 }
 
 // Dados de campanhas importados da Marketing API

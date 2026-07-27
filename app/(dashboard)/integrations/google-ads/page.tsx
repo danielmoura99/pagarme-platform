@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Heading } from "@/components/ui/heading";
-import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, RefreshCw } from "lucide-react";
 
 interface Config {
   connected: boolean;
@@ -22,6 +22,17 @@ interface Config {
   hasClientSecret: boolean;
   hasRefreshToken: boolean;
   lastUploadAt: string | null;
+  lastSyncAt?: string | null;
+}
+
+interface SyncLog {
+  id: string;
+  status: string;
+  campaigns: number;
+  dateRange: string | null;
+  errorMessage: string | null;
+  duration: number | null;
+  createdAt: string;
 }
 
 export default function GoogleAdsPage() {
@@ -42,9 +53,53 @@ export default function GoogleAdsPage() {
   const [loginCustomerId, setLoginCustomerId] = useState("");
   const [conversionActionId, setConversionActionId] = useState("");
 
+  // Sincronização de métricas
+  const [logs, setLogs] = useState<SyncLog[]>([]);
+  const [syncing, setSyncing] = useState(false);
+
   useEffect(() => {
     fetchConfig();
+    fetchLogs();
   }, []);
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch("/api/integrations/google-ads/sync-logs");
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch {
+      // silencioso — histórico é secundário
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/integrations/google-ads/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setMessage({
+        type: "success",
+        text: `Sync concluído: ${data.campaigns} registros em ${(
+          data.duration / 1000
+        ).toFixed(1)}s`,
+      });
+      fetchConfig();
+      fetchLogs();
+    } catch (e) {
+      setMessage({
+        type: "error",
+        text: e instanceof Error ? e.message : "Erro ao sincronizar",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const fetchConfig = async () => {
     setLoading(true);
@@ -342,6 +397,94 @@ export default function GoogleAdsPage() {
             <p className="text-xs text-muted-foreground">
               Último envio: {new Date(config.lastUploadAt).toLocaleString("pt-BR")}
             </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sincronização de métricas de campanha (ROAS) */}
+      <Card className="mt-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Métricas de Campanha</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Importa investimento, cliques e impressões das campanhas e cruza com
+            suas vendas reais para calcular ROAS e CPA.
+          </p>
+
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              onClick={handleSync}
+              disabled={syncing || !config?.connected}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Sincronizando..." : "Sincronizar Agora"}
+            </Button>
+            {config?.lastSyncAt && (
+              <span className="text-xs text-muted-foreground">
+                Último sync: {new Date(config.lastSyncAt).toLocaleString("pt-BR")}
+              </span>
+            )}
+          </div>
+
+          {!config?.connected && (
+            <p className="text-xs text-amber-700">
+              Complete as credenciais para habilitar a sincronização.
+            </p>
+          )}
+
+          {logs.length > 0 && (
+            <div className="overflow-x-auto pt-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs uppercase">
+                    <th className="text-left pb-2 font-medium">Data</th>
+                    <th className="text-left pb-2 font-medium">Status</th>
+                    <th className="text-right pb-2 font-medium">Registros</th>
+                    <th className="text-left pb-2 font-medium">Período</th>
+                    <th className="text-right pb-2 font-medium">Duração</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {logs.map((log) => (
+                    <tr key={log.id} className="hover:bg-muted/30">
+                      <td className="py-2 pr-4 text-xs text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleString("pt-BR")}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {log.status === "success" ? (
+                          <Badge
+                            variant="secondary"
+                            className="bg-green-100 text-green-800 text-xs"
+                          >
+                            OK
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-100 text-red-800 text-xs"
+                            title={log.errorMessage || ""}
+                          >
+                            Erro
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2 text-right font-medium">
+                        {log.campaigns}
+                      </td>
+                      <td className="py-2 px-4 text-xs text-muted-foreground">
+                        {log.dateRange || "—"}
+                      </td>
+                      <td className="py-2 text-right text-xs text-muted-foreground">
+                        {log.duration ? `${(log.duration / 1000).toFixed(1)}s` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -220,6 +220,104 @@ export async function uploadClickConversion(
   }
 }
 
+// ─── Relatórios de campanha (GAQL) ───────────────────────────────────────────
+
+export interface CampaignMetric {
+  campaignId: string;
+  campaignName: string;
+  date: string; // "YYYY-MM-DD"
+  impressions: number;
+  clicks: number;
+  cost: number; // BRL
+  conversions: number;
+  conversionsValue: number;
+}
+
+/**
+ * Busca métricas diárias de campanha via GoogleAdsService.SearchStream.
+ * Somente leitura — não altera nada na conta.
+ */
+export async function fetchCampaignMetrics(
+  credentials: Omit<GoogleAdsCredentials, "conversionActionId">,
+  dateFrom: string, // "YYYY-MM-DD"
+  dateTo: string
+): Promise<{ metrics?: CampaignMetric[]; error?: string }> {
+  try {
+    const { accessToken, error } = await getAccessToken(
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken
+    );
+    if (!accessToken) return { error: error || "falha ao obter access token" };
+
+    const query = `
+      SELECT
+        campaign.id,
+        campaign.name,
+        metrics.impressions,
+        metrics.clicks,
+        metrics.cost_micros,
+        metrics.conversions,
+        metrics.conversions_value,
+        segments.date
+      FROM campaign
+      WHERE segments.date BETWEEN '${dateFrom}' AND '${dateTo}'
+    `.trim();
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      "developer-token": credentials.developerToken,
+      "Content-Type": "application/json",
+    };
+    if (credentials.loginCustomerId) {
+      headers["login-customer-id"] = credentials.loginCustomerId;
+    }
+
+    const res = await fetch(
+      `${GOOGLE_ADS_API_BASE}/customers/${credentials.customerId}/googleAds:searchStream`,
+      { method: "POST", headers, body: JSON.stringify({ query }) }
+    );
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const msg =
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (data as any)?.error?.message ||
+        (Array.isArray(data) && data[0]?.error?.message) ||
+        `HTTP ${res.status}`;
+      return { error: msg };
+    }
+
+    // searchStream devolve um array de chunks, cada um com "results"
+    const chunks = Array.isArray(data) ? data : [data];
+    const metrics: CampaignMetric[] = [];
+
+    for (const chunk of chunks) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const row of (chunk?.results ?? []) as any[]) {
+        metrics.push({
+          campaignId: String(row.campaign?.id ?? ""),
+          campaignName: row.campaign?.name ?? "",
+          date: row.segments?.date ?? "",
+          impressions: Number(row.metrics?.impressions ?? 0),
+          clicks: Number(row.metrics?.clicks ?? 0),
+          // cost_micros: 1.000.000 micros = 1 unidade da moeda
+          cost: Number(row.metrics?.costMicros ?? 0) / 1_000_000,
+          conversions: Number(row.metrics?.conversions ?? 0),
+          conversionsValue: Number(row.metrics?.conversionsValue ?? 0),
+        });
+      }
+    }
+
+    return { metrics };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "erro desconhecido",
+    };
+  }
+}
+
 /** Valida as credenciais fazendo uma chamada leve à API. */
 export async function validateGoogleAdsCredentials(
   credentials: Omit<GoogleAdsCredentials, "conversionActionId">

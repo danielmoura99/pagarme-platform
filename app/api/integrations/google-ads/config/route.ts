@@ -49,6 +49,7 @@ export async function GET() {
       hasClientSecret: !!config.clientSecret,
       hasRefreshToken: !!config.refreshToken,
       lastUploadAt: config.lastUploadAt,
+      lastSyncAt: config.lastSyncAt,
     });
   } catch (error) {
     console.error("[GOOGLE_ADS_CONFIG_GET_ERROR]", error);
