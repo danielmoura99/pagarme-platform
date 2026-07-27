@@ -82,16 +82,38 @@ export async function POST(request: Request) {
       const dayEnd = new Date(m.date + "T23:59:59.999Z");
 
       // Cruzar com vendas reais: pedidos pagos daquele dia atribuídos à campanha.
-      // A ligação é feita pelo utm_campaign — depende de as campanhas usarem
-      // {campaign.name} no template de URL (ver observação no README da integração).
-      const orders = await prisma.order.findMany({
-        where: {
-          status: "paid",
-          createdAt: { gte: dateStart, lte: dayEnd },
-          utmCampaign: m.campaignName,
-        },
-        select: { amount: true },
-      });
+      //
+      // ATRIBUIÇÃO POR PRIORIDADE — evita contar a mesma venda em duas campanhas:
+      //   1) gadCampaignId (enviado pelo próprio Google) tem precedência absoluta;
+      //   2) o fallback por utm_campaign vale SOMENTE para pedidos sem gadCampaignId.
+      //
+      // Sem essa separação, um pedido com gadCampaignId da campanha A mas
+      // utm_campaign apontando para a campanha B seria somado nas duas,
+      // inflando a receita total do relatório.
+      const utmMatchers: { utmCampaign: string }[] = [];
+      if (m.campaignName) utmMatchers.push({ utmCampaign: m.campaignName });
+      if (m.campaignId) utmMatchers.push({ utmCampaign: m.campaignId });
+
+      const attributionFilters: object[] = [];
+      if (m.campaignId) {
+        attributionFilters.push({ gadCampaignId: m.campaignId });
+      }
+      if (utmMatchers.length > 0) {
+        attributionFilters.push({
+          AND: [{ gadCampaignId: null }, { OR: utmMatchers }],
+        });
+      }
+
+      const orders = attributionFilters.length
+        ? await prisma.order.findMany({
+            where: {
+              status: "paid",
+              createdAt: { gte: dateStart, lte: dayEnd },
+              OR: attributionFilters,
+            },
+            select: { amount: true },
+          })
+        : [];
 
       const purchases = orders.length;
       const revenue = orders.reduce((sum, o) => sum + o.amount, 0) / 100;

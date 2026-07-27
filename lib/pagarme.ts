@@ -143,9 +143,11 @@ export class PagarmeClient {
       if (!response.ok) {
         // Tenta fazer o parse apenas se houver conteúdo
         let errorMessage = "Failed to create transaction";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let errorData: any = null;
         if (responseData) {
           try {
-            const errorData = JSON.parse(responseData);
+            errorData = JSON.parse(responseData);
             errorMessage = errorData.message || errorMessage;
           } catch (e) {
             console.error(
@@ -154,7 +156,22 @@ export class PagarmeClient {
             );
           }
         }
-        throw new Error(errorMessage);
+
+        // Log do corpo bruto: "The request is invalid." sozinho não diz nada;
+        // o detalhe do campo que falhou vem no objeto "errors".
+        console.error(
+          `[Pagar.me] Rejeitado (HTTP ${response.status}):`,
+          responseData?.slice(0, 2000) || "(corpo vazio)"
+        );
+
+        // Anexa a resposta ao erro no formato que a rota de checkout já espera
+        // (err.response.data) — assim a tradução de erros passa a funcionar e o
+        // cliente recebe uma mensagem específica em vez de uma genérica.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const err: any = new Error(errorMessage);
+        err.status = response.status;
+        err.response = { data: errorData };
+        throw err;
       }
 
       // Tenta fazer o parse apenas se houver conteúdo

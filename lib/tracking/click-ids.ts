@@ -9,13 +9,28 @@
 // Sem o gclid gravado no pedido não é possível importar a conversão para o
 // Google Ads depois — por isso a captura precisa acontecer o quanto antes.
 
-const KEYS = ["gclid", "gbraid", "wbraid"] as const;
+const KEYS = ["gclid", "gbraid", "wbraid", "gad_campaignid"] as const;
 type ClickIdKey = (typeof KEYS)[number];
 
-export type ClickIds = Record<ClickIdKey, string | null> & {
+export type ClickIds = {
+  gclid: string | null;
+  gbraid: string | null;
+  wbraid: string | null;
+  /** ID da campanha do Google (gad_campaignid) — atribuição direta, sem UTM. */
+  gadCampaignId: string | null;
   fbp: string | null;
   fbc: string | null;
 };
+
+/** Lê um parâmetro da URL da página anterior (a landing page do anúncio). */
+function readFromReferrer(param: string): string | null {
+  if (typeof document === "undefined" || !document.referrer) return null;
+  try {
+    return new URL(document.referrer).searchParams.get(param);
+  } catch {
+    return null;
+  }
+}
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -71,6 +86,7 @@ export function getClickIds(): ClickIds {
     gclid: null,
     gbraid: null,
     wbraid: null,
+    gadCampaignId: null,
     fbp: null,
     fbc: null,
   };
@@ -78,20 +94,32 @@ export function getClickIds(): ClickIds {
 
   try {
     const params = new URLSearchParams(window.location.search);
+    const read = (key: string) =>
+      params.get(key) ||
+      window.sessionStorage.getItem(key) ||
+      window.localStorage.getItem(`${key}_backup`) ||
+      null;
+
     const result = { ...empty };
-    for (const key of KEYS) {
-      result[key] =
-        params.get(key) ||
-        window.sessionStorage.getItem(key) ||
-        window.localStorage.getItem(`${key}_backup`) ||
-        null;
-    }
+    result.gclid = read("gclid");
+    result.gbraid = read("gbraid");
+    result.wbraid = read("wbraid");
+
+    // gad_campaignid não tem cookie próprio: a reserva é o referrer, que em
+    // um clique de anúncio é a landing page com o parâmetro na URL.
+    result.gadCampaignId =
+      read("gad_campaignid") || readFromReferrer("gad_campaignid");
 
     // Reserva do Google: se o click id não veio na URL nem ficou salvo
     // (caso típico de origem em outro domínio), busca nos cookies que o
     // cross-domain linking do Google transfere.
     if (!result.gclid) result.gclid = parseGclCookie(readCookie("_gcl_aw"));
     if (!result.gbraid) result.gbraid = parseGclCookie(readCookie("_gcl_gb"));
+
+    // Última reserva: os click ids na URL da landing page (referrer)
+    if (!result.gclid) result.gclid = readFromReferrer("gclid");
+    if (!result.gbraid) result.gbraid = readFromReferrer("gbraid");
+    if (!result.wbraid) result.wbraid = readFromReferrer("wbraid");
 
     // Meta: _fbp/_fbc são cookies criados pelo próprio pixel.
     result.fbp = readCookie("_fbp");

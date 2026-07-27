@@ -200,13 +200,15 @@ export function CheckoutForm({
     gclid: string | null;
     gbraid: string | null;
     wbraid: string | null;
+    gadCampaignId: string | null;
     fbp: string | null;
     fbc: string | null;
   } => {
     const empty = {
       utmSource: null, utmMedium: null, utmCampaign: null, utmTerm: null,
       utmContent: null, referrer: null, landingPage: null,
-      gclid: null, gbraid: null, wbraid: null, fbp: null, fbc: null,
+      gclid: null, gbraid: null, wbraid: null, gadCampaignId: null,
+      fbp: null, fbc: null,
     };
     if (typeof window === "undefined") return empty;
     const urlParams = new URLSearchParams(window.location.search);

@@ -175,8 +175,12 @@ model Order {
   wbraid            String?   // Google: clique app iOS → web
   fbp               String?   // Meta browser id (cookie _fbp)
   fbc               String?   // Meta click id (cookie _fbc, derivado do fbclid)
+  // ID da campanha enviado pelo próprio Google (gad_campaignid na URL do anúncio).
+  // Atribuição confiável, independente do utm_campaign estar bem configurado.
+  gadCampaignId     String?
 
   @@index([gclid])
+  @@index([gadCampaignId])
 
   @@index([checkoutId])
   @@index([status])

@@ -47,6 +47,7 @@ const checkoutSchema = z.object({
   wbraid: z.string().max(500).optional().nullable(),
   fbp: z.string().max(500).optional().nullable(),
   fbc: z.string().max(500).optional().nullable(),
+  gadCampaignId: z.string().max(100).optional().nullable(),
   installments: z.number().int().min(1).max(12).optional(),
   totalAmount: z.number().int().positive().optional(),
 });
@@ -292,6 +293,7 @@ export async function POST(request: Request) {
       wbraid       = null,
       fbp          = null,
       fbc          = null,
+      gadCampaignId = null,
     } = parsed.data;
 
     // Verificar se já existe uma transação com este checkoutId
@@ -761,6 +763,7 @@ export async function POST(request: Request) {
           wbraid,
           fbp,
           fbc,
+          gadCampaignId,
           items: {
             create: {
               productId: dbProduct.id,
@@ -853,6 +856,7 @@ export async function POST(request: Request) {
       wbraid,
       fbp,
       fbc,
+      gadCampaignId,
       items: {
         create: {
           productId: dbProduct.id,
