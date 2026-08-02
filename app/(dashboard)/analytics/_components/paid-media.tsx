@@ -28,7 +28,11 @@ import {
   Filter,
 } from "lucide-react";
 
+type Platform = "meta" | "google";
+
 interface CampaignRow {
+  id: string; // "plataforma:campaignId"
+  platform: Platform;
   campaignId: string;
   campaignName: string;
   spend: number;
@@ -41,6 +45,26 @@ interface CampaignRow {
   cpa: number;
   cpc: number;
   ctr: number;
+}
+
+const PLATFORM_LABEL: Record<Platform, string> = {
+  meta: "Meta",
+  google: "Google",
+};
+
+function PlatformBadge({ platform }: { platform: Platform }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={
+        platform === "google"
+          ? "bg-amber-100 text-amber-800 text-xs"
+          : "bg-blue-100 text-blue-800 text-xs"
+      }
+    >
+      {PLATFORM_LABEL[platform]}
+    </Badge>
+  );
 }
 
 interface Summary {
@@ -57,6 +81,10 @@ interface Summary {
 
 interface PaidMediaData {
   connected: boolean;
+  platforms?: {
+    meta: { connected: boolean; lastSyncAt: string | null };
+    google: { connected: boolean; lastSyncAt: string | null };
+  };
   summary: Summary | null;
   campaigns: CampaignRow[];
 }
@@ -80,6 +108,7 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState<"all" | Platform>("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,24 +143,42 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
     }
   }
 
+  // Sincroniza as plataformas conectadas em paralelo. Uma falhar não impede
+  // a outra — o resultado reporta cada uma separadamente.
   async function handleSync() {
     setSyncing(true);
     setSyncMsg(null);
-    try {
-      const res = await fetch("/api/integrations/facebook-ads/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      setSyncMsg(`${json.campaigns} campanhas sincronizadas`);
-      fetchData();
-    } catch (e) {
-      setSyncMsg(e instanceof Error ? e.message : "Erro ao sincronizar");
-    } finally {
-      setSyncing(false);
+
+    const targets: { platform: Platform; url: string }[] = [];
+    if (data?.platforms?.meta.connected ?? true) {
+      targets.push({ platform: "meta", url: "/api/integrations/facebook-ads/sync" });
     }
+    if (data?.platforms?.google.connected) {
+      targets.push({ platform: "google", url: "/api/integrations/google-ads/sync" });
+    }
+
+    const results = await Promise.all(
+      targets.map(async ({ platform, url }) => {
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const json = await res.json();
+          if (json.error) throw new Error(json.error);
+          return `${PLATFORM_LABEL[platform]}: ${json.campaigns} campanhas`;
+        } catch (e) {
+          return `${PLATFORM_LABEL[platform]}: erro (${
+            e instanceof Error ? e.message : "desconhecido"
+          })`;
+        }
+      })
+    );
+
+    setSyncMsg(results.join(" · "));
+    fetchData();
+    setSyncing(false);
   }
 
   function toggleCampaign(id: string) {
@@ -148,7 +195,7 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
 
   function selectAll() {
     if (!data) return;
-    setSelectedCampaigns(new Set(data.campaigns.map((c) => c.campaignId)));
+    setSelectedCampaigns(new Set(data.campaigns.map((c) => c.id)));
   }
 
   function clearSelection() {
@@ -185,26 +232,38 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
           <div className="flex items-center gap-3">
             <Zap className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="font-medium text-sm">Facebook Ads não conectado</p>
+              <p className="font-medium text-sm">Nenhuma plataforma de anúncios conectada</p>
               <p className="text-xs text-muted-foreground">
-                Conecte sua conta para ver ROAS, CPA e métricas de campanhas
+                Conecte Meta ou Google Ads para ver ROAS, CPA e métricas de campanhas
               </p>
             </div>
           </div>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/integrations/facebook-ads">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Configurar
-            </Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/integrations/facebook-ads">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Meta
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/integrations/google-ads">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Google
+              </Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
   }
 
-  const { campaigns } = data;
+  // Campanhas visíveis conforme a plataforma escolhida
+  const campaigns =
+    platformFilter === "all"
+      ? data.campaigns
+      : data.campaigns.filter((c) => c.platform === platformFilter);
 
-  if (!data.summary || campaigns.length === 0) {
+  if (!data.summary || data.campaigns.length === 0) {
     return (
       <Card className="border-dashed">
         <CardContent className="p-6 flex items-center justify-between">
@@ -229,7 +288,7 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
   // Filtrar campanhas com base na seleção (vazio = todas)
   const hasFilter = selectedCampaigns.size > 0;
   const filtered = hasFilter
-    ? campaigns.filter((c) => selectedCampaigns.has(c.campaignId))
+    ? campaigns.filter((c) => selectedCampaigns.has(c.id))
     : campaigns;
 
   // Recalcular summary com base no filtro
@@ -255,6 +314,32 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
     <div className="space-y-4">
       {/* Filtro por campanha + sync */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Seletor de plataforma */}
+        {(data.platforms?.meta.connected && data.platforms?.google.connected) && (
+          <div className="flex rounded-md border overflow-hidden h-8">
+            {([
+              ["all", "Todas"],
+              ["meta", "Meta"],
+              ["google", "Google"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => {
+                  setPlatformFilter(value);
+                  setSelectedCampaigns(new Set()); // some ao trocar de plataforma
+                }}
+                className={`px-3 text-xs transition-colors ${
+                  platformFilter === value
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Dropdown multi-select */}
         <div className="relative" ref={dropdownRef}>
           <Button
@@ -295,18 +380,19 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
               {/* Lista de campanhas */}
               <div className="max-h-56 overflow-y-auto py-1">
                 {campaigns.map((c) => {
-                  const isSelected = selectedCampaigns.has(c.campaignId);
+                  const isSelected = selectedCampaigns.has(c.id);
                   return (
                     <button
-                      key={c.campaignId}
+                      key={c.id}
                       className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors"
-                      onClick={() => toggleCampaign(c.campaignId)}
+                      onClick={() => toggleCampaign(c.id)}
                     >
                       <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${
                         isSelected ? "bg-blue-600 border-blue-600" : "border-gray-300"
                       }`}>
                         {isSelected && <Check className="h-3 w-3 text-white" />}
                       </div>
+                      <PlatformBadge platform={c.platform} />
                       <span className="truncate flex-1">{c.campaignName}</span>
                       <span className="text-xs text-muted-foreground shrink-0">{fmt(c.spend)}</span>
                     </button>
@@ -321,13 +407,13 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
         {hasFilter && (
           <div className="flex flex-wrap items-center gap-1.5">
             {campaigns
-              .filter((c) => selectedCampaigns.has(c.campaignId))
+              .filter((c) => selectedCampaigns.has(c.id))
               .map((c) => (
                 <Badge
-                  key={c.campaignId}
+                  key={c.id}
                   variant="secondary"
                   className="gap-1 pl-2 pr-1 py-0.5 text-xs cursor-pointer hover:bg-muted"
-                  onClick={() => toggleCampaign(c.campaignId)}
+                  onClick={() => toggleCampaign(c.id)}
                 >
                   {c.campaignName.length > 25 ? c.campaignName.slice(0, 25) + "..." : c.campaignName}
                   <X className="h-3 w-3" />
@@ -437,6 +523,7 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
             <TableHeader>
               <TableRow>
                 <TableHead>Campanha</TableHead>
+                <TableHead>Plataforma</TableHead>
                 <TableHead className="text-right">Investido</TableHead>
                 <TableHead className="text-right">Cliques</TableHead>
                 <TableHead className="text-right">Compras</TableHead>
@@ -447,9 +534,12 @@ export function PaidMedia({ fromDate, toDate }: { fromDate?: string; toDate?: st
             </TableHeader>
             <TableBody>
               {filtered.map((c) => (
-                <TableRow key={c.campaignId}>
+                <TableRow key={c.id}>
                   <TableCell className="font-medium max-w-[200px] truncate" title={c.campaignName}>
                     {c.campaignName}
+                  </TableCell>
+                  <TableCell>
+                    <PlatformBadge platform={c.platform} />
                   </TableCell>
                   <TableCell className="text-right">{fmt(c.spend)}</TableCell>
                   <TableCell className="text-right">{fmtNum(c.clicks)}</TableCell>

@@ -15,6 +15,12 @@ const GOOGLE_ADS_API_BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_API_V
 const OAUTH_TOKEN_URL = "https://www.googleapis.com/oauth2/v3/token";
 const TZ = "America/Sao_Paulo";
 
+// Data Manager API — substitui o ConversionUploadService, que o Google fechou
+// para integrações novas. Não exige developer token, apenas OAuth com o
+// escopo https://www.googleapis.com/auth/datamanager
+const DATA_MANAGER_INGEST_URL =
+  "https://datamanager.googleapis.com/v1/events:ingest";
+
 function sha256(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -103,6 +109,112 @@ export interface GoogleConversionParams {
   phone?: string | null;
 }
 
+/**
+ * Envia a conversão pela Data Manager API (caminho atual).
+ *
+ * Substitui o uploadClickConversion, que o Google restringiu a integrações
+ * antigas. Nunca lança exceção — falha aqui não pode derrubar o webhook.
+ *
+ * @param validateOnly quando true, o Google valida o payload e responde sem
+ *   registrar a conversão. Útil para testar sem sujar os relatórios.
+ */
+export async function ingestConversionEvent(
+  credentials: GoogleAdsCredentials,
+  params: GoogleConversionParams,
+  validateOnly = false
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  try {
+    const {
+      clientId,
+      clientSecret,
+      refreshToken,
+      customerId,
+      loginCustomerId,
+      conversionActionId,
+    } = credentials;
+
+    if (!clientId || !clientSecret || !refreshToken || !customerId || !conversionActionId) {
+      return { success: false, skipped: true, error: "credenciais incompletas" };
+    }
+
+    const { gclid, gbraid, wbraid } = params;
+    if (!gclid && !gbraid && !wbraid) {
+      // Sem click id não há como atribuir — não é erro, apenas não se aplica.
+      return { success: false, skipped: true, error: "sem click id" };
+    }
+
+    const { accessToken, error } = await getAccessToken(clientId, clientSecret, refreshToken);
+    if (!accessToken) return { success: false, error: error || "falha no OAuth" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adIdentifiers: Record<string, any> = {};
+    if (gclid) adIdentifiers.gclid = gclid;
+    if (gbraid) adIdentifiers.gbraid = gbraid;
+    if (wbraid) adIdentifiers.wbraid = wbraid;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const event: Record<string, any> = {
+      eventTimestamp: params.conversionDateTime.toISOString(), // RFC 3339
+      adIdentifiers,
+      conversionValue: params.conversionValue,
+      currency: params.currencyCode || "BRL",
+      eventSource: "WEB",
+    };
+    // transactionId = nosso orderId: é o que permite dedup e ajustes depois
+    if (params.orderId) event.transactionId = params.orderId;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // "product" não existe no topo do destination — ele pertence ao
+    // ProductAccount (operatingAccount / loginAccount).
+    const destination: Record<string, any> = {
+      operatingAccount: { product: "GOOGLE_ADS", accountId: customerId },
+      productDestinationId: conversionActionId,
+    };
+    if (loginCustomerId) {
+      destination.loginAccount = { product: "GOOGLE_ADS", accountId: loginCustomerId };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: Record<string, any> = {
+      destinations: [destination],
+      events: [event],
+    };
+    if (validateOnly) body.validateOnly = true;
+
+    const res = await fetch(DATA_MANAGER_INGEST_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = (data as any)?.error?.message || `HTTP ${res.status}`;
+      return { success: false, error: `${msg} ${JSON.stringify(data).slice(0, 600)}` };
+    }
+
+    // A API pode responder 200 com avisos por campo — vale registrar
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const warnings = (data as any)?.fieldWarnings;
+    if (warnings?.length) {
+      console.warn("[GOOGLE_DM] Avisos:", JSON.stringify(warnings).slice(0, 400));
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "erro desconhecido",
+    };
+  }
+}
+
+/** @deprecated O Google restringiu este endpoint a integrações antigas. Use ingestConversionEvent. */
 export async function uploadClickConversion(
   credentials: GoogleAdsCredentials,
   params: GoogleConversionParams

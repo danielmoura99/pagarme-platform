@@ -6,77 +6,113 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
+type Platform = "meta" | "google";
+
+interface CampaignRow {
+  id: string; // "plataforma:campaignId" — evita colisão entre plataformas
+  platform: Platform;
+  campaignId: string;
+  campaignName: string;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  reach: number;
+  purchases: number;
+  revenue: number;
+}
+
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+
     const { searchParams } = new URL(request.url);
     const fromParam = searchParams.get("from");
     const toParam = searchParams.get("to");
 
     const fromDate = fromParam
       ? new Date(fromParam + "T00:00:00")
-      : (() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d; })();
-    const toDate = toParam
-      ? new Date(toParam + "T23:59:59")
-      : new Date();
+      : (() => {
+          const d = new Date();
+          d.setDate(1);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })();
+    const toDate = toParam ? new Date(toParam + "T23:59:59") : new Date();
 
-    // Verificar se há integração configurada
-    const config = await prisma.facebookAdsConfig.findFirst({
-      select: { enabled: true, accessToken: true, lastSyncAt: true },
-    });
+    const period = { dateStart: { gte: fromDate }, dateEnd: { lte: toDate } };
 
-    if (!config?.accessToken) {
-      return NextResponse.json({ connected: false, campaigns: [], summary: null });
-    }
+    // Configurações e dados das duas plataformas em paralelo
+    const [metaConfig, googleConfig, metaRows, googleRows] = await Promise.all([
+      prisma.facebookAdsConfig.findFirst({
+        select: { accessToken: true, lastSyncAt: true },
+      }),
+      prisma.googleAdsConfig.findFirst({
+        select: { refreshToken: true, enabled: true, lastSyncAt: true },
+      }),
+      prisma.facebookAdsCampaignData.findMany({ where: period }),
+      prisma.googleAdsCampaignData.findMany({ where: period }),
+    ]);
 
-    // Buscar dados de campanhas no período
-    const campaigns = await prisma.facebookAdsCampaignData.findMany({
-      where: {
-        dateStart: { gte: fromDate },
-        dateEnd: { lte: toDate },
-      },
-      orderBy: { spend: "desc" },
-    });
+    const metaConnected = !!metaConfig?.accessToken;
+    const googleConnected = !!googleConfig?.refreshToken;
 
-    // Agregar por campanha (pode haver múltiplos dias por campanha)
-    const campaignMap = new Map<string, {
-      campaignId: string;
-      campaignName: string;
-      spend: number;
-      clicks: number;
-      impressions: number;
-      reach: number;
-      purchases: number;
-      revenue: number;
-    }>();
+    // Agrega por campanha (as tabelas têm granularidade diária)
+    const map = new Map<string, CampaignRow>();
 
-    for (const row of campaigns) {
-      const existing = campaignMap.get(row.campaignId);
-      if (existing) {
-        existing.spend += row.spend;
-        existing.clicks += row.clicks;
-        existing.impressions += row.impressions;
-        existing.reach += row.reach;
-        existing.purchases += row.purchases;
-        existing.revenue += row.revenue;
-      } else {
-        campaignMap.set(row.campaignId, {
-          campaignId: row.campaignId,
-          campaignName: row.campaignName,
-          spend: row.spend,
-          clicks: row.clicks,
-          impressions: row.impressions,
-          reach: row.reach,
-          purchases: row.purchases,
-          revenue: row.revenue,
-        });
+    const add = (
+      platform: Platform,
+      campaignId: string,
+      campaignName: string,
+      values: {
+        spend: number;
+        clicks: number;
+        impressions: number;
+        reach: number;
+        purchases: number;
+        revenue: number;
       }
+    ) => {
+      const id = `${platform}:${campaignId}`;
+      const existing = map.get(id);
+      if (existing) {
+        existing.spend += values.spend;
+        existing.clicks += values.clicks;
+        existing.impressions += values.impressions;
+        existing.reach += values.reach;
+        existing.purchases += values.purchases;
+        existing.revenue += values.revenue;
+      } else {
+        map.set(id, { id, platform, campaignId, campaignName, ...values });
+      }
+    };
+
+    for (const r of metaRows) {
+      add("meta", r.campaignId, r.campaignName, {
+        spend: r.spend,
+        clicks: r.clicks,
+        impressions: r.impressions,
+        reach: r.reach,
+        purchases: r.purchases,
+        revenue: r.revenue,
+      });
     }
 
-    const aggregated = Array.from(campaignMap.values())
+    for (const r of googleRows) {
+      // Google usa "cost" no lugar de "spend" e não expõe alcance
+      add("google", r.campaignId, r.campaignName, {
+        spend: r.cost,
+        clicks: r.clicks,
+        impressions: r.impressions,
+        reach: 0,
+        purchases: r.purchases,
+        revenue: r.revenue,
+      });
+    }
+
+    const campaigns = Array.from(map.values())
       .map((c) => ({
         ...c,
         roas: c.spend > 0 ? c.revenue / c.spend : 0,
@@ -86,28 +122,73 @@ export async function GET(request: Request) {
       }))
       .sort((a, b) => b.spend - a.spend);
 
-    // Totais gerais
-    const totalSpend = aggregated.reduce((s, c) => s + c.spend, 0);
-    const totalRevenue = aggregated.reduce((s, c) => s + c.revenue, 0);
-    const totalPurchases = aggregated.reduce((s, c) => s + c.purchases, 0);
-    const totalClicks = aggregated.reduce((s, c) => s + c.clicks, 0);
-    const totalImpressions = aggregated.reduce((s, c) => s + c.impressions, 0);
+    if (!metaConnected && !googleConnected) {
+      return NextResponse.json({
+        connected: false,
+        platforms: {
+          meta: { connected: false, lastSyncAt: null },
+          google: { connected: false, lastSyncAt: null },
+        },
+        campaigns: [],
+        summary: null,
+      });
+    }
 
-    const summary = {
-      totalSpend,
-      totalRevenue,
-      totalPurchases,
-      totalClicks,
-      totalImpressions,
-      roas: totalSpend > 0 ? totalRevenue / totalSpend : 0,
-      cpa: totalPurchases > 0 ? totalSpend / totalPurchases : 0,
-      profit: totalRevenue - totalSpend,
-      lastSyncAt: config.lastSyncAt,
-    };
+    const totalSpend = campaigns.reduce((s, c) => s + c.spend, 0);
+    const totalRevenue = campaigns.reduce((s, c) => s + c.revenue, 0);
+    const totalPurchases = campaigns.reduce((s, c) => s + c.purchases, 0);
+    const totalClicks = campaigns.reduce((s, c) => s + c.clicks, 0);
+    const totalImpressions = campaigns.reduce((s, c) => s + c.impressions, 0);
 
-    return NextResponse.json({ connected: true, summary, campaigns: aggregated });
+    // Sync mais recente entre as plataformas conectadas
+    const syncDates = [
+      metaConnected ? metaConfig?.lastSyncAt : null,
+      googleConnected ? googleConfig?.lastSyncAt : null,
+    ].filter(Boolean) as Date[];
+    const lastSyncAt =
+      syncDates.length > 0
+        ? new Date(Math.max(...syncDates.map((d) => d.getTime()))).toISOString()
+        : null;
+
+    return NextResponse.json({
+      connected: true,
+      platforms: {
+        meta: {
+          connected: metaConnected,
+          lastSyncAt: metaConfig?.lastSyncAt ?? null,
+        },
+        google: {
+          connected: googleConnected,
+          lastSyncAt: googleConfig?.lastSyncAt ?? null,
+        },
+      },
+      summary: {
+        totalSpend,
+        totalRevenue,
+        totalPurchases,
+        totalClicks,
+        totalImpressions,
+        roas: totalSpend > 0 ? totalRevenue / totalSpend : 0,
+        cpa: totalPurchases > 0 ? totalSpend / totalPurchases : 0,
+        profit: totalRevenue - totalSpend,
+        lastSyncAt,
+      },
+      campaigns,
+    });
   } catch (error) {
-    console.error("[PAID_MEDIA_ANALYTICS_ERROR]", error);
-    return NextResponse.json({ error: "Erro ao buscar dados de mídia paga" }, { status: 500 });
+    console.error("[PAID_MEDIA_ERROR]", error);
+    return NextResponse.json(
+      {
+        error: "Failed to fetch paid media data",
+        connected: false,
+        platforms: {
+          meta: { connected: false, lastSyncAt: null },
+          google: { connected: false, lastSyncAt: null },
+        },
+        campaigns: [],
+        summary: null,
+      },
+      { status: 500 }
+    );
   }
 }

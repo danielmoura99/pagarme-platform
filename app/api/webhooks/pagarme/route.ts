@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import crypto from "crypto";
 import { sendMetaPurchaseEvent } from "@/lib/tracking/meta-capi";
 import { selectCharge } from "@/lib/pagarme";
-import { uploadClickConversion } from "@/lib/tracking/google-ads-api";
+import { ingestConversionEvent } from "@/lib/tracking/google-ads-api";
 
 // Verificar assinatura HMAC do webhook Pagar.me
 function verifyWebhookSignature(body: string, signature: string | null, secret: string): boolean {
@@ -552,7 +552,7 @@ async function uploadGoogleAdsConversion(order: any) {
       return;
     }
 
-    const result = await uploadClickConversion(
+    const result = await ingestConversionEvent(
       {
         developerToken: config.developerToken,
         clientId: config.clientId,
