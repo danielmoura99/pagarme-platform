@@ -31,7 +31,13 @@ interface LeadEvent {
   source?: string;
   campaign?: string;
   medium?: string;
+  term?: string;
+  content?: string;
   referrer?: string;
+  gclid?: string;
+  gadCampaignId?: string;
+  /** "pedido" (confiável) ou "pixel" (reserva) */
+  attributionSource?: string;
 }
 
 interface EventsData {
@@ -203,7 +209,43 @@ export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: s
                   Meio: {event.medium}
                 </Badge>
               )}
+              {event.term && (
+                <Badge variant="outline" className="text-xs">
+                  Termo: {event.term}
+                </Badge>
+              )}
+              {event.content && (
+                <Badge variant="outline" className="text-xs">
+                  Conteúdo: {event.content}
+                </Badge>
+              )}
             </div>
+
+            {/* Click ids: atribuição direta, independente de UTM */}
+            {(event.gclid || event.gadCampaignId) && (
+              <div className="flex flex-wrap gap-2">
+                {event.gclid && (
+                  <Badge className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-100">
+                    Clique Google confirmado
+                  </Badge>
+                )}
+                {event.gadCampaignId && (
+                  <Badge variant="outline" className="text-xs">
+                    ID da campanha: {event.gadCampaignId}
+                  </Badge>
+                )}
+              </div>
+            )}
+
+            {event.attributionSource && (
+              <p className="text-xs text-gray-500">
+                Origem do dado:{" "}
+                {event.attributionSource === "pedido"
+                  ? "pedido (confiável — capturado no checkout)"
+                  : "pixel (reserva — pode indicar o próprio site)"}
+              </p>
+            )}
+
             {event.referrer && (
               <p className="text-xs text-gray-600">
                 <span className="font-medium">Referrer:</span> {event.referrer}
@@ -223,7 +265,11 @@ export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: s
             <span className="font-medium text-gray-700">ID do Evento:</span> {event.id}
           </p>
           <p className="text-sm">
-            <span className="font-medium text-gray-700">Plataforma:</span> {event.platform}
+            <span className="font-medium text-gray-700">Pixel que registrou:</span>{" "}
+            {event.platform}
+            <span className="text-xs text-gray-500 ml-1">
+              (não indica a origem da venda)
+            </span>
           </p>
           <p className="text-sm">
             <span className="font-medium text-gray-700">Data/Hora:</span>{" "}

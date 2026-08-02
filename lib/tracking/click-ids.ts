@@ -62,6 +62,36 @@ function parseGclCookie(raw: string | null): string | null {
   return value || null;
 }
 
+/**
+ * Extrai um cookie do parâmetro "_gl" (cross-domain linker do Google).
+ *
+ * Formato: "1*<hash>*_gcl_au*<base64url>*_gcl_aw*<base64url>"
+ *
+ * Por que ler direto daqui: normalmente é o gtag do Google que interpreta o
+ * "_gl" e grava o cookie correspondente. Se não houver pixel do Google
+ * configurado no produto, o gtag nunca carrega e o cookie nunca é criado —
+ * o gclid chega na URL mas se perde. Lendo o "_gl" por conta própria, a
+ * captura passa a funcionar independentemente de haver pixel.
+ */
+function parseGlParam(gl: string | null, cookieName: string): string | null {
+  if (!gl) return null;
+  const parts = gl.split("*");
+  const idx = parts.indexOf(cookieName);
+  if (idx === -1 || idx + 1 >= parts.length) return null;
+
+  // base64url, com o padding "=" substituído por "."
+  const b64 = parts[idx + 1]
+    .replace(/\./g, "")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  try {
+    return typeof atob === "function" ? atob(b64) || null : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Lê os click IDs da URL atual e persiste. Chamar no carregamento da página. */
 export function persistClickIds(): void {
   if (typeof window === "undefined") return;
@@ -115,6 +145,13 @@ export function getClickIds(): ClickIds {
     // cross-domain linking do Google transfere.
     if (!result.gclid) result.gclid = parseGclCookie(readCookie("_gcl_aw"));
     if (!result.gbraid) result.gbraid = parseGclCookie(readCookie("_gcl_gb"));
+
+    // Reserva decisiva: ler o próprio parâmetro "_gl" da URL. Sem pixel do
+    // Google no produto, o gtag não carrega e o cookie acima nunca é criado —
+    // então esta é a única forma de recuperar o gclid vindo de outro domínio.
+    const gl = params.get("_gl");
+    if (!result.gclid) result.gclid = parseGclCookie(parseGlParam(gl, "_gcl_aw"));
+    if (!result.gbraid) result.gbraid = parseGclCookie(parseGlParam(gl, "_gcl_gb"));
 
     // Última reserva: os click ids na URL da landing page (referrer)
     if (!result.gclid) result.gclid = readFromReferrer("gclid");

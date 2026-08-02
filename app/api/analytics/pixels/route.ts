@@ -127,7 +127,22 @@ export async function GET(request: Request) {
     const orders = orderIds.length > 0
       ? await prisma.order.findMany({
           where: { id: { in: orderIds } },
-          include: { customer: { select: { name: true, email: true, document: true } } },
+          select: {
+            id: true,
+            status: true,
+            paymentMethod: true,
+            installments: true,
+            // Origem capturada no checkout — fonte confiável de atribuição
+            utmSource: true,
+            utmCampaign: true,
+            utmMedium: true,
+            utmTerm: true,
+            utmContent: true,
+            referrer: true,
+            gclid: true,
+            gadCampaignId: true,
+            customer: { select: { name: true, email: true, document: true } },
+          },
         })
       : [];
     const orderMap = orders.reduce((acc, o) => { acc[o.id] = o; return acc; }, {} as Record<string, typeof orders[0]>);
@@ -200,10 +215,21 @@ export async function GET(request: Request) {
           orderStatus: order?.status || null,
           paymentMethod: order?.paymentMethod || null,
           installments: order?.installments || null,
-          source: event.source || null,
-          campaign: event.campaign || null,
-          medium: event.medium || null,
-          referrer: event.referrer || null,
+          // Origem: o Order é a fonte confiável (capturada na URL do checkout).
+          // O PixelEventLog só entra como reserva, para eventos sem pedido —
+          // ele é preenchido no /success via referrer e costuma trazer o nosso
+          // próprio domínio como "fonte", o que é atribuição falsa.
+          source: order?.utmSource || event.source || null,
+          campaign: order?.utmCampaign || event.campaign || null,
+          medium: order?.utmMedium || event.medium || null,
+          term: order?.utmTerm || null,
+          content: order?.utmContent || null,
+          referrer: order?.referrer || event.referrer || null,
+          // Click ids: atribuição direta da plataforma, sem depender de UTM
+          gclid: order?.gclid || null,
+          gadCampaignId: order?.gadCampaignId || null,
+          // De onde veio o dado de origem — ajuda a diagnosticar
+          attributionSource: order?.utmSource ? "pedido" : event.source ? "pixel" : null,
         };
       }),
     });
