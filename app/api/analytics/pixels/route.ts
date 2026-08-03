@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/analytics/pixels/route.ts
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
@@ -82,45 +83,60 @@ export async function GET(request: Request) {
       where: { enabled: true },
     });
 
-    // Filtro de evento para paginação
-    const eventFilter = eventTypeParam
-      ? { eventType: eventTypeParam }
-      : {
-          OR: [
-            { orderId: { not: null } },
-            { eventType: { in: ["Purchase", "InitiateCheckout", "AddPaymentInfo"] } },
-          ],
-        };
+    // Paginação DEDUPLICADA por pedido.
+    // Um produto com N pixels gera N registros para a mesma venda (um por
+    // pixel). Para a listagem, isso é a mesma venda repetida — então
+    // agrupamos por orderId. Eventos sem pedido seguem individuais (id).
+    const eventTypeClause = eventTypeParam
+      ? Prisma.sql`AND "eventType" = ${eventTypeParam}`
+      : Prisma.sql`AND ("orderId" IS NOT NULL OR "eventType" IN ('Purchase','InitiateCheckout','AddPaymentInfo'))`;
 
-    // Paginação dos lead events
-    const totalCount = await prisma.pixelEventLog.count({
-      where: {
-        createdAt: { gte: fromDate, lte: toDate },
-        ...eventFilter,
-      },
-    });
-
+    const totalRows = await prisma.$queryRaw<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM (
+        SELECT DISTINCT COALESCE("orderId", id) AS grp
+        FROM "PixelEventLog"
+        WHERE "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+        ${eventTypeClause}
+      ) t
+    `;
+    const totalCount = Number(totalRows[0]?.count ?? 0);
     const totalPages = Math.ceil(totalCount / limit);
     const skip = (page - 1) * limit;
 
-    const leadEvents = await prisma.pixelEventLog.findMany({
-      take: limit,
-      skip,
-      orderBy: { createdAt: "desc" },
-      where: {
-        createdAt: { gte: fromDate, lte: toDate },
-        ...eventFilter,
-      },
-      include: {
-        pixelConfig: {
-          select: {
-            platform: true,
-            pixelId: true,
-            product: { select: { name: true } },
+    // Um evento representativo por grupo (o mais recente), já paginado
+    const pageRows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM (
+        SELECT DISTINCT ON (COALESCE("orderId", id)) id, "createdAt"
+        FROM "PixelEventLog"
+        WHERE "createdAt" >= ${fromDate} AND "createdAt" <= ${toDate}
+        ${eventTypeClause}
+        ORDER BY COALESCE("orderId", id), "createdAt" DESC
+      ) t
+      ORDER BY t."createdAt" DESC
+      LIMIT ${limit} OFFSET ${skip}
+    `;
+    const pageIds = pageRows.map((r) => r.id);
+
+    const leadEventsRaw = pageIds.length
+      ? await prisma.pixelEventLog.findMany({
+          where: { id: { in: pageIds } },
+          include: {
+            pixelConfig: {
+              select: {
+                platform: true,
+                pixelId: true,
+                product: { select: { name: true } },
+              },
+            },
           },
-        },
-      },
-    });
+        })
+      : [];
+
+    // Preserva a ordem definida pelo SQL (mais recente primeiro)
+    const ordem = new Map(pageIds.map((id, i) => [id, i]));
+    const leadEvents = leadEventsRaw.sort(
+      (a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0)
+    );
 
     // Enriquecer lead events com dados do pedido/cliente
     const orderIds = leadEvents.map((e) => e.orderId).filter(Boolean) as string[];
@@ -146,6 +162,24 @@ export async function GET(request: Request) {
         })
       : [];
     const orderMap = orders.reduce((acc, o) => { acc[o.id] = o; return acc; }, {} as Record<string, typeof orders[0]>);
+
+    // Quais pixels registraram cada venda — a informação que seria perdida
+    // ao deduplicar. Vira uma lista no lugar de linhas repetidas.
+    const pixelsPorPedido = new Map<string, string[]>();
+    if (orderIds.length > 0) {
+      const todos = await prisma.pixelEventLog.findMany({
+        where: { orderId: { in: orderIds } },
+        select: { orderId: true, pixelConfig: { select: { platform: true } } },
+      });
+      for (const e of todos) {
+        if (!e.orderId) continue;
+        const lista = pixelsPorPedido.get(e.orderId) ?? [];
+        if (!lista.includes(e.pixelConfig.platform)) {
+          lista.push(e.pixelConfig.platform);
+        }
+        pixelsPorPedido.set(e.orderId, lista);
+      }
+    }
 
     // Top produtos por receita real (Order)
     const topProducts = await prisma.$queryRaw`
@@ -204,6 +238,10 @@ export async function GET(request: Request) {
           id: event.id,
           eventType: event.eventType,
           platform: event.pixelConfig.platform,
+          // Todos os pixels que registraram esta venda (antes eram linhas separadas)
+          pixels: event.orderId
+            ? pixelsPorPedido.get(event.orderId) ?? [event.pixelConfig.platform]
+            : [event.pixelConfig.platform],
           productName: event.pixelConfig.product.name,
           timestamp: event.createdAt,
           data: eventData,

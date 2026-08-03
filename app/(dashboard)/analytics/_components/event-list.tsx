@@ -14,6 +14,8 @@ interface LeadEvent {
   id: string;
   eventType: string;
   platform: string;
+  /** Todos os pixels que registraram esta venda */
+  pixels?: string[];
   productName: string;
   timestamp: string;
   data: any;
@@ -265,8 +267,12 @@ export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: s
             <span className="font-medium text-gray-700">ID do Evento:</span> {event.id}
           </p>
           <p className="text-sm">
-            <span className="font-medium text-gray-700">Pixel que registrou:</span>{" "}
-            {event.platform}
+            <span className="font-medium text-gray-700">
+              {(event.pixels?.length ?? 1) > 1
+                ? "Pixels que registraram:"
+                : "Pixel que registrou:"}
+            </span>{" "}
+            {(event.pixels ?? [event.platform]).join(", ")}
             <span className="text-xs text-gray-500 ml-1">
               (não indica a origem da venda)
             </span>
