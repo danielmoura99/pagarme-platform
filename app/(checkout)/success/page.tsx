@@ -37,18 +37,37 @@ export default async function SuccessPage({
   const resolvedSearchParams = await searchParams;
   const order = await getOrderData(resolvedSearchParams.orderId);
 
+  // Só dispara conversão para pedidos recentes.
+  //
+  // Esta página dispara Purchase toda vez que é aberta. Sem esta janela,
+  // reabrir o link meses depois (histórico, favorito, link antigo) manda uma
+  // conversão nova para Meta e Google — fora da janela de deduplicação delas,
+  // isso vira uma venda fantasma nos relatórios das plataformas.
+  // Uma compra legítima chega aqui em minutos.
+  const JANELA_CONVERSAO_MS = 24 * 60 * 60 * 1000;
+  const pedidoRecente = order
+    ? Date.now() - new Date(order.createdAt).getTime() <= JANELA_CONVERSAO_MS
+    : false;
+
+  if (order && !pedidoRecente) {
+    console.warn(
+      `[SUCCESS] Purchase não disparado — pedido ${order.id} tem mais de 24h (criado em ${order.createdAt.toISOString()})`
+    );
+  }
+
   // Preparar dados do evento de conversão
-  const pixelEventData = order
-    ? {
-        email: order.customer?.email,
-        content_ids: order.items.map((item) => item.productId),
-        content_name: order.items[0]?.product.name,
-        content_type: "product",
-        value: order.amount / 100,
-        currency: "BRL",
-        num_items: order.items.length,
-      }
-    : undefined;
+  const pixelEventData =
+    order && pedidoRecente
+      ? {
+          email: order.customer?.email,
+          content_ids: order.items.map((item) => item.productId),
+          content_name: order.items[0]?.product.name,
+          content_type: "product",
+          value: order.amount / 100,
+          currency: "BRL",
+          num_items: order.items.length,
+        }
+      : undefined;
 
   return (
     <PixelProvider

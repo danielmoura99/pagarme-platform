@@ -422,50 +422,60 @@ async function createPurchasePixelEvents(orderId: string) {
     const capiToken = fbConfig?.capiAccessToken || process.env.META_CAPI_ACCESS_TOKEN;
     const capiTestCode = fbConfig?.capiTestEventCode || process.env.META_CAPI_TEST_EVENT_CODE;
 
+    // Guard por PEDIDO (não por pixel): protege contra webhook reenviado pela
+    // Pagar.me. Cobre tanto o registro quanto os envios às plataformas —
+    // sem isto, um retry mandaria a conversão duplicada para a Meta.
+    const jaProcessado = await prisma.pixelEventLog.findFirst({
+      where: { orderId: order.id, eventType: "Purchase" },
+      select: { id: true },
+    });
+
+    if (jaProcessado) {
+      console.log(
+        `[PIXEL_SERVER_SIDE] Purchase já processado para orderId=${order.id} — ignorando (webhook repetido)`
+      );
+      return;
+    }
+
+    // Registro interno: UMA linha por venda, não uma por pixel.
+    // O pixel referenciado é apenas o primeiro ativo — os envios abaixo
+    // continuam acontecendo para todos eles.
+    const primeiroItem = order.items[0];
+    const primeiroPixel = order.items
+      .flatMap((i) => i.product.pixelConfigs)
+      .find(Boolean);
+
+    if (primeiroPixel && primeiroItem) {
+      await prisma.pixelEventLog.create({
+        data: {
+          pixelConfigId: primeiroPixel.id,
+          eventType: "Purchase",
+          eventData: {
+            value: order.amount / 100,
+            currency: "BRL",
+            content_name: primeiroItem.product.name,
+            email: order.customer?.email ?? null,
+            server_side: true,
+          },
+          orderId: order.id,
+          source:      order.utmSource   ?? null,
+          medium:      order.utmMedium   ?? null,
+          campaign:    order.utmCampaign ?? null,
+          term:        order.utmTerm     ?? null,
+          content:     order.utmContent  ?? null,
+          referrer:    order.referrer    ?? null,
+          landingPage: order.landingPage ?? null,
+        },
+      });
+
+      console.log(
+        `[PIXEL_SERVER_SIDE] Purchase registrado — orderId=${order.id} source=${order.utmSource}`
+      );
+    }
+
+    // Envios às plataformas seguem POR PIXEL — inalterados.
     for (const item of order.items) {
       for (const pixelConfig of item.product.pixelConfigs) {
-        // Deduplicar: só criar se ainda não existir Purchase para este orderId + pixelConfig
-        const existing = await prisma.pixelEventLog.findFirst({
-          where: {
-            pixelConfigId: pixelConfig.id,
-            eventType: "Purchase",
-            orderId: order.id,
-          },
-        });
-
-        if (existing) {
-          console.log(
-            `[PIXEL_SERVER_SIDE] Purchase já existe para pixelConfig=${pixelConfig.id} orderId=${order.id} — ignorando`
-          );
-          continue;
-        }
-
-        await prisma.pixelEventLog.create({
-          data: {
-            pixelConfigId: pixelConfig.id,
-            eventType: "Purchase",
-            eventData: {
-              value: order.amount / 100,
-              currency: "BRL",
-              content_name: item.product.name,
-              email: order.customer?.email ?? null,
-              server_side: true,
-            },
-            orderId: order.id,
-            source:      order.utmSource   ?? null,
-            medium:      order.utmMedium   ?? null,
-            campaign:    order.utmCampaign ?? null,
-            term:        order.utmTerm     ?? null,
-            content:     order.utmContent  ?? null,
-            referrer:    order.referrer    ?? null,
-            landingPage: order.landingPage ?? null,
-          },
-        });
-
-        console.log(
-          `[PIXEL_SERVER_SIDE] Purchase criado — pixelConfig=${pixelConfig.id} orderId=${order.id} source=${order.utmSource}`
-        );
-
         // ✅ Meta Conversions API (server-side): envia o Purchase direto à Meta.
         // Garante que compras que não chegam no /success (ex: PIX, aba fechada)
         // sejam reportadas. event_id = order.id → a Meta deduplica com o pixel do browser.

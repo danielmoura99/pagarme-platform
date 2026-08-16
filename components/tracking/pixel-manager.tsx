@@ -342,7 +342,18 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
 
   const fireEvent = (eventName: string) => {
     console.log(`🔥 [PIXEL_FIRE_START] Iniciando fireEvent("${eventName}") - ${pixels.length} pixels configurados`);
-    
+
+    // Registro interno: UMA vez por evento, não uma por pixel.
+    // Gravar por pixel duplicava as linhas e inflava a contagem dos relatórios
+    // (um produto com 2 pixels contava cada checkout duas vezes).
+    // Os disparos às plataformas, abaixo, seguem por pixel.
+    const pixelParaLog = pixels.find(
+      (p) => p.enabled && p.events.includes(eventName as any)
+    );
+    if (pixelParaLog) {
+      void logPixelEvent(pixelParaLog.id, eventName, eventData, eventData?.orderId);
+    }
+
     pixels.forEach(async (pixel, index) => {
       console.log(`🎯 [PIXEL_LOOP] Processando pixel ${index + 1}/${pixels.length}:`, {
         platform: pixel.platform,
@@ -367,8 +378,7 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
         platform: pixel.platform
       });
       
-      // Log do evento sempre (mesmo em modo teste para analytics)
-      await logPixelEvent(pixel.id, eventName, eventData, eventData?.orderId);
+      // O registro interno já foi feito uma vez, antes deste laço.
 
       if (pixel.testMode) {
         console.log(`[PIXEL TEST MODE] ${eventName} event:`, {
