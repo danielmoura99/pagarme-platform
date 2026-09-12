@@ -1,7 +1,7 @@
 // app/(dashboard)/dash/_components/revenue-chart.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSalesData } from "./use-sales-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LineChart,
@@ -20,24 +20,9 @@ interface RevenueData {
 }
 
 export function RevenueChart() {
-  const [data, setData] = useState<RevenueData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: salesData, loading } = useSalesData();
+  const data = salesData?.salesByMonth ?? [];
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch("/api/analytics/sales?months=12");
-        const result = await response.json();
-        setData(result.salesByMonth || []);
-      } catch (error) {
-        console.error("Error fetching revenue data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {

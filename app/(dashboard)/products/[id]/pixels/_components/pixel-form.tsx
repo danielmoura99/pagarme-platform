@@ -42,13 +42,10 @@ const pixelFormSchema = z.object({
 
 type PixelFormValues = z.infer<typeof pixelFormSchema>;
 
-const availableEvents: PixelEvent[] = [
-  "PageView",
-  "ViewContent",
-  "InitiateCheckout",
-  "AddPaymentInfo",
-  "Purchase",
-];
+// Apenas os eventos que a plataforma realmente dispara.
+// PageView, ViewContent e AddPaymentInfo estavam listados mas nunca foram
+// implementados: marcá-los dava a falsa impressão de que eram rastreados.
+const availableEvents: PixelEvent[] = ["InitiateCheckout", "Purchase"];
 
 interface PixelFormProps {
   productId: string;
@@ -67,7 +64,7 @@ export function PixelForm({ productId, initialData }: PixelFormProps) {
       pixelId: initialData?.pixelId || "",
       enabled: initialData?.enabled ?? true,
       testMode: initialData?.testMode ?? false,
-      events: initialData?.events || ["PageView", "Purchase"],
+      events: initialData?.events || ["InitiateCheckout", "Purchase"],
     },
   });
 
@@ -220,7 +217,8 @@ export function PixelForm({ productId, initialData }: PixelFormProps) {
                     ))}
                   </div>
                   <FormDescription>
-                    Selecione quais eventos deseja rastrear
+                    Eventos disparados pela plataforma: InitiateCheckout ao
+                    abrir o checkout e Purchase ao confirmar a compra.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

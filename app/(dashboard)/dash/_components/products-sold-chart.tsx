@@ -1,7 +1,8 @@
 // app/(dashboard)/dash/_components/products-sold-chart.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSalesData } from "./use-sales-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart,
@@ -31,26 +32,10 @@ const COLORS = [
 ];
 
 export function ProductsSoldChart() {
-  const [allProducts, setAllProducts] = useState<ProductSoldData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: salesData, loading } = useSalesData();
+  const allProducts = salesData?.productsSold ?? [];
   const [viewMode, setViewMode] = useState<"quantity" | "revenue">("quantity");
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch("/api/analytics/sales?months=12");
-        const result = await response.json();
-        // Guardar todos os produtos (já vem ordenado por quantidade da API)
-        setAllProducts(result.productsSold || []);
-      } catch (error) {
-        console.error("Error fetching products sold:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
 
   // Reordenar e pegar top 5 baseado no modo selecionado
   const data = viewMode === "quantity"

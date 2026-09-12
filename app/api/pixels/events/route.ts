@@ -23,7 +23,6 @@ export async function POST(request: Request) {
       term,
       content,
       referrer,
-      landingPage,
     } = body;
 
     // Validar se o pixel existe
@@ -55,16 +54,7 @@ export async function POST(request: Request) {
     });
 
     if (duplicateCheck.isDuplicate) {
-      console.log("[PIXEL_EVENT_DUPLICATE_DETECTED]", {
-        eventType,
-        orderId,
-        sessionId,
-        existingId: duplicateCheck.existingEvent?.id,
-        strategy: duplicateCheck.strategy,
-        timeDiff: Date.now() - duplicateCheck.existingEvent?.createdAt.getTime(),
-      });
-
-      // Retornar o evento existente com informação de duplicata
+      // Devolve o evento já existente em vez de criar outro
       return NextResponse.json({
         ...duplicateCheck.existingEvent,
         duplicate: true,
@@ -90,23 +80,8 @@ export async function POST(request: Request) {
         term,
         content,
         referrer,
-        landingPage,
       },
     });
-
-    // Log para debug
-    console.log("[PIXEL_EVENT_SAVED]", {
-      id: pixelEventLog.id,
-      eventType,
-      source,
-      medium,
-      campaign,
-      referrer,
-      landingPage,
-    });
-
-    // Integração com RD Station desativada — não é mais utilizada.
-    // As rotas e o histórico permanecem no projeto, apenas não são acionados.
 
     return NextResponse.json(pixelEventLog);
   } catch (error) {

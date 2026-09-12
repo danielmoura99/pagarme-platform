@@ -464,7 +464,6 @@ async function createPurchasePixelEvents(orderId: string) {
           term:        order.utmTerm     ?? null,
           content:     order.utmContent  ?? null,
           referrer:    order.referrer    ?? null,
-          landingPage: order.landingPage ?? null,
         },
       });
 

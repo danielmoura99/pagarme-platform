@@ -156,32 +156,6 @@ export async function GET(request: Request) {
       LIMIT 20
     `;
 
-    // Landing pages (PixelEventLog — é onde registramos a primeira visita)
-    const landingPages = await prisma.$queryRaw`
-      SELECT
-        "landingPage",
-        COUNT(DISTINCT "sessionId") as visitors,
-        COUNT(CASE WHEN "eventType" = 'Purchase' THEN 1 END) as conversions,
-        COALESCE(
-          SUM(
-            CASE
-              WHEN "eventType" = 'Purchase'
-              AND jsonb_typeof("eventData"->'value') = 'number'
-              THEN ("eventData"->>'value')::float
-              ELSE 0
-            END
-          ),
-          0
-        ) as revenue
-      FROM "PixelEventLog"
-      WHERE "createdAt" >= ${fromDate}
-        AND "createdAt" <= ${toDate}
-        AND "landingPage" IS NOT NULL
-        AND "sessionId" IS NOT NULL
-      GROUP BY "landingPage"
-      ORDER BY visitors DESC
-      LIMIT 10
-    `;
 
     return NextResponse.json({
       sources: formattedSources,
@@ -211,19 +185,6 @@ export async function GET(request: Request) {
           conversionRate: initiateCheckout > 0 ? (conversions / initiateCheckout) * 100 : 0,
         };
       }),
-      landingPages: (landingPages as any[]).map((page) => {
-        const visitors = Number(page.visitors) || 0;
-        const conversions = Number(page.conversions) || 0;
-        const revenue = Number(page.revenue) || 0;
-
-        return {
-          url: page.landingPage,
-          visitors,
-          conversions,
-          revenue,
-          conversionRate: visitors > 0 ? (conversions / visitors) * 100 : 0,
-        };
-      }),
     });
   } catch (error) {
     console.error("[TRAFFIC_SOURCES_ERROR]", error);
@@ -239,7 +200,6 @@ export async function GET(request: Request) {
           averageConversionRate: 0,
         },
         topCampaigns: [],
-        landingPages: [],
       },
       { status: 500 }
     );

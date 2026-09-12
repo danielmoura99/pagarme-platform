@@ -1,7 +1,7 @@
 // app/(dashboard)/dash/_components/top-affiliates-chart.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSalesData } from "./use-sales-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart,
@@ -36,24 +36,9 @@ const COLORS = [
 ];
 
 export function TopAffiliatesChart() {
-  const [data, setData] = useState<AffiliateData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: salesData, loading } = useSalesData();
+  const data = salesData?.topAffiliates ?? [];
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch("/api/analytics/sales?months=12");
-        const result = await response.json();
-        setData(result.topAffiliates || []);
-      } catch (error) {
-        console.error("Error fetching top affiliates:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
 
   if (loading) {
     return (

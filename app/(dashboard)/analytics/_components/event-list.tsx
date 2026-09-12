@@ -36,6 +36,7 @@ interface LeadEvent {
   term?: string;
   content?: string;
   referrer?: string;
+  landingPage?: string;
   gclid?: string;
   gadCampaignId?: string;
   /** "pedido" (confiável) ou "pixel" (reserva) */
@@ -189,7 +190,7 @@ export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: s
       )}
 
       {/* Dados de Tracking */}
-      {(event.source || event.campaign || event.referrer) && (
+      {(event.source || event.campaign || event.referrer || event.landingPage) && (
         <div>
           <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
             📊 Origem do Tráfego
@@ -248,8 +249,15 @@ export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: s
               </p>
             )}
 
+            {event.landingPage && (
+              <p className="text-xs text-gray-600 break-all">
+                <span className="font-medium">URL da compra:</span>{" "}
+                {event.landingPage}
+              </p>
+            )}
+
             {event.referrer && (
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-gray-600 break-all">
                 <span className="font-medium">Referrer:</span> {event.referrer}
               </p>
             )}

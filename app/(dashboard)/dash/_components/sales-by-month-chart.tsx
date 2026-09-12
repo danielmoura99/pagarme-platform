@@ -1,7 +1,7 @@
 // app/(dashboard)/dash/_components/sales-by-month-chart.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSalesData } from "./use-sales-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ComposedChart,
@@ -22,24 +22,9 @@ interface SalesByMonthData {
 }
 
 export function SalesByMonthChart() {
-  const [data, setData] = useState<SalesByMonthData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: salesData, loading } = useSalesData();
+  const data = salesData?.salesByMonth ?? [];
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch("/api/analytics/sales?months=12", { cache: "no-store" });
-        const result = await response.json();
-        setData(result.salesByMonth || []);
-      } catch (error) {
-        console.error("Error fetching sales by month:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
 
   if (loading) {
     return (

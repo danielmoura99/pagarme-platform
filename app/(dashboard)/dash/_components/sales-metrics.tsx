@@ -1,7 +1,7 @@
 // app/(dashboard)/dash/_components/sales-metrics.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSalesData } from "./use-sales-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DollarSign,
@@ -29,26 +29,10 @@ const defaultPeriod: PeriodMetrics = { totalSales: 0, totalRevenue: 0, averageTi
 const defaultAllTime: AllTimeMetrics = { totalSales: 0, totalRevenue: 0, averageTicket: 0 };
 
 export function SalesMetrics() {
-  const [metrics, setMetrics] = useState<PeriodMetrics>(defaultPeriod);
-  const [allTime, setAllTime] = useState<AllTimeMetrics>(defaultAllTime);
-  const [loading, setLoading] = useState(true);
+  const { data: salesData, loading } = useSalesData();
+  const metrics = salesData?.metrics ?? defaultPeriod;
+  const allTime = salesData?.allTimeMetrics ?? defaultAllTime;
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const response = await fetch("/api/analytics/sales?months=12", { cache: "no-store" });
-        const result = await response.json();
-        setMetrics(result.metrics || defaultPeriod);
-        setAllTime(result.allTimeMetrics || defaultAllTime);
-      } catch (error) {
-        console.error("Error fetching metrics:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {

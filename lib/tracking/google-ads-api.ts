@@ -160,6 +160,18 @@ export async function ingestConversionEvent(
       currency: params.currencyCode || "BRL",
       eventSource: "WEB",
     };
+
+    // Enhanced conversions: dados do cliente com hash SHA-256.
+    // Melhoram o match e permitem que o Google atribua a conversão mesmo
+    // quando o click id sozinho não é suficiente para identificar o clique.
+    const userIdentifiers: Record<string, string>[] = [];
+    const hashedEmail = hashEmail(params.email);
+    const hashedPhone = hashPhone(params.phone);
+    if (hashedEmail) userIdentifiers.push({ emailAddress: hashedEmail });
+    if (hashedPhone) userIdentifiers.push({ phoneNumber: hashedPhone });
+    if (userIdentifiers.length > 0) {
+      event.userData = { userIdentifiers };
+    }
     // transactionId = nosso orderId: é o que permite dedup e ajustes depois
     if (params.orderId) event.transactionId = params.orderId;
 
@@ -179,6 +191,8 @@ export async function ingestConversionEvent(
       destinations: [destination],
       events: [event],
     };
+    // Exigido pela API sempre que userData é enviado
+    if (event.userData) body.encoding = "HEX";
     if (validateOnly) body.validateOnly = true;
 
     const res = await fetch(DATA_MANAGER_INGEST_URL, {

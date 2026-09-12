@@ -6,10 +6,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { loadFacebookPixel, trackFacebookEvent } from "@/lib/tracking/facebook";
-import {
-  loadGoogleAdsPixel,
-  trackGoogleAdsEvent,
-} from "@/lib/tracking/google-ads";
+import { loadGoogleAdsPixel } from "@/lib/tracking/google-ads";
 import {
   loadGoogleAnalytics,
   trackGA4EcommerceEvent,
@@ -32,12 +29,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
   const firedEvents = useRef<Set<string>>(new Set());
 
   // ✅ DEBUG: Log quando PixelManager carrega
-  console.log("🚀 [PIXEL_MANAGER] Iniciado:", {
-    pathname,
-    pixelsCount: pixels.length,
-    eventData: eventData ? "presente" : "ausente",
-    timestamp: new Date().toISOString()
-  });
 
   // Gerar ou recuperar session ID
   const getSessionId = () => {
@@ -84,20 +75,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
         const referrerParams = new URLSearchParams(referrerUrl.search);
         
         // ✅ DEBUG COMPLETO
-        console.log("🔍 [DEBUG_REFERRER] Análise completa do referrer:", {
-          fullReferrer: document.referrer,
-          hostname: referrerUrl.hostname,
-          pathname: referrerUrl.pathname,
-          search: referrerUrl.search,
-          utmSourceFromReferrer: referrerParams.get("utm_source"),
-          utmMediumFromReferrer: referrerParams.get("utm_medium"),
-          allStoredUTMs: {
-            sessionUtmSource: sessionStorage.getItem("utm_source"),
-            localUtmSource: localStorage.getItem("utm_source"),
-            backupUtmSource: localStorage.getItem("utm_source_backup"),
-            timestamp: localStorage.getItem("utm_timestamp")
-          }
-        });
         
         // Tentar extrair UTMs do referrer
         if (referrerParams.get("utm_source")) {
@@ -107,10 +84,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
           utmTerm = referrerParams.get("utm_term");
           utmContent = referrerParams.get("utm_content");
           
-          console.log("🎯 [PIXEL_UTM_REFERRER] UTMs extraídos do referrer:", {
-            referrer: document.referrer,
-            extracted: { source: utmSource, medium: utmMedium, campaign: utmCampaign }
-          });
         }
         // ✅ NOVA LÓGICA: Se referrer é escolatradershouse.com.br, assumir que veio de tráfego pago
         else if (referrerUrl.hostname === "escolatradershouse.com.br") {
@@ -124,10 +97,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
             utmMedium = localStorage.getItem("utm_medium_backup");
             utmCampaign = localStorage.getItem("utm_campaign_backup");
             
-            console.log("🎯 [PIXEL_UTM_BACKUP] UTMs recuperados do backup recente:", {
-              source: utmSource, medium: utmMedium, campaign: utmCampaign,
-              referrerPath: referrerUrl.pathname
-            });
           }
           // ❌ REMOVIDO: Não assumir mais que escolatradershouse.com.br = tráfego pago
           // Deixar que siga o fluxo normal de detecção de referrer
@@ -164,11 +133,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       sessionStorage.setItem("utm_term", utmTerm || "");
       sessionStorage.setItem("utm_content", utmContent || "");
       
-      console.log("🎯 [PIXEL_UTM_URL] UTMs da URL atual:", {
-        source: utmSource,
-        medium: utmMedium,
-        campaign: utmCampaign
-      });
     }
 
     // Capturar landing page (primeira página da sessão)
@@ -218,12 +182,6 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       landingPage: landingPage,
     };
 
-    console.log("🎯 [PIXEL_TRAFFIC_SOURCE] Origem final detectada:", {
-      ...trafficSourceResult,
-      detectionMethod: utmSource ? "UTM_FOUND" : (document.referrer ? "REFERRER_FALLBACK" : "DIRECT"),
-      referrerHost: document.referrer ? new URL(document.referrer).hostname : null,
-      referrerPath: document.referrer ? new URL(document.referrer).pathname : null,
-    });
 
     return trafficSourceResult;
   };
@@ -267,25 +225,16 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
         case "facebook":
           loadFacebookPixel(pixel.pixelId);
           if (pixel.testMode) {
-            console.log(
-              `[PIXEL TEST MODE] Facebook Pixel loaded: ${pixel.pixelId}`
-            );
           }
           break;
         case "google_ads":
           loadGoogleAdsPixel(pixel.pixelId);
           if (pixel.testMode) {
-            console.log(
-              `[PIXEL TEST MODE] Google Ads Pixel loaded: ${pixel.pixelId}`
-            );
           }
           break;
         case "google_analytics":
           loadGoogleAnalytics(pixel.pixelId);
           if (pixel.testMode) {
-            console.log(
-              `[PIXEL TEST MODE] Google Analytics loaded: ${pixel.pixelId}`
-            );
           }
           break;
       }
@@ -306,10 +255,8 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       const eventKey = `InitiateCheckout-${pathname}-${getSessionId()}`;
       if (!firedEvents.current.has(eventKey)) {
         firedEvents.current.add(eventKey);
-        console.log(`🎯 [PIXEL_FIRE] Disparando InitiateCheckout - Key: ${eventKey}`);
         fireEvent("InitiateCheckout");
       } else {
-        console.log(`🔄 [PIXEL_SKIP] InitiateCheckout já disparado - Key: ${eventKey}`);
       }
     }
     // ✅ Página de sucesso → Purchase (com orderId único)
@@ -317,31 +264,18 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
       const eventKey = `Purchase-${eventData.orderId}`;
       if (!firedEvents.current.has(eventKey)) {
         firedEvents.current.add(eventKey);
-        console.log(`🎯 [PIXEL_FIRE] Disparando Purchase - Key: ${eventKey}`);
         fireEvent("Purchase");
       } else {
-        console.log(`🔄 [PIXEL_SKIP] Purchase já disparado - Key: ${eventKey}`);
       }
     }
   }, [pathname, pixels.length, eventData?.orderId]); // ✅ Dependências específicas
 
   // Função para verificar se deve disparar pixel baseado na fonte de tráfego
-  const shouldFirePixel = (platform: string, trafficSource: ReturnType<typeof getTrafficSource>) => {
-    switch (platform) {
-      case "google_ads":
-        // Google Ads: só dispara para tráfego pago do Google (evita atribuição incorreta)
-        return trafficSource.source === "google" &&
-               (trafficSource.medium === "cpc" || trafficSource.medium === "paid");
-
-      // Facebook, TikTok, Snapchat, Google Analytics e demais: disparam sempre.
-      // Cada plataforma usa seu próprio algoritmo de atribuição — não filtramos aqui.
-      default:
-        return true;
-    }
-  };
+  // Mantido como ponto único de decisão caso alguma plataforma volte a exigir
+  // filtro por origem. O Google saiu daqui: sua conversão agora é server-side.
+  const shouldFirePixel = (_platform: string) => true;
 
   const fireEvent = (eventName: string) => {
-    console.log(`🔥 [PIXEL_FIRE_START] Iniciando fireEvent("${eventName}") - ${pixels.length} pixels configurados`);
 
     // Registro interno: UMA vez por evento, não uma por pixel.
     // Gravar por pixel duplicava as linhas e inflava a contagem dos relatórios
@@ -355,49 +289,25 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
     }
 
     pixels.forEach(async (pixel, index) => {
-      console.log(`🎯 [PIXEL_LOOP] Processando pixel ${index + 1}/${pixels.length}:`, {
-        platform: pixel.platform,
-        pixelId: pixel.pixelId,
-        enabled: pixel.enabled,
-        events: pixel.events,
-        eventName
-      });
 
       if (!pixel.enabled || !pixel.events.includes(eventName as any)) {
-        console.log(`❌ [PIXEL_SKIP_CONFIG] Pixel ${pixel.platform} pulado - não habilitado ou evento não configurado`);
         return;
       }
 
       const trafficSource = getTrafficSource();
 
       // ✅ NOVO: Verificar se deve disparar pixel baseado na fonte
-      const shouldFire = shouldFirePixel(pixel.platform, trafficSource);
+      const shouldFire = shouldFirePixel(pixel.platform);
       
-      console.log(`🎯 [PIXEL_SHOULD_FIRE] ${pixel.platform}: ${shouldFire}`, {
-        trafficSource,
-        platform: pixel.platform
-      });
       
       // O registro interno já foi feito uma vez, antes deste laço.
 
       if (pixel.testMode) {
-        console.log(`[PIXEL TEST MODE] ${eventName} event:`, {
-          platform: pixel.platform,
-          pixelId: pixel.pixelId,
-          eventData,
-          trafficSource,
-          shouldFire, // ✅ Mostrar se vai disparar
-        });
         return;
       }
 
       // ✅ NOVO: Só dispara o pixel se passou no filtro
       if (!shouldFire) {
-        console.log(`[PIXEL FILTERED] ${pixel.platform} pixel skipped for traffic source:`, {
-          source: trafficSource.source,
-          medium: trafficSource.medium,
-          reason: "Not paid traffic for this platform"
-        });
         return;
       }
 
@@ -408,7 +318,10 @@ export function PixelManager({ pixels, eventData }: PixelManagerProps) {
           break;
 
         case "google_ads":
-          trackGoogleAdsEvent(eventName, eventData);
+          // Conversão do Google é enviada SOMENTE server-side (Data Manager API),
+          // no webhook de pagamento confirmado. Disparar aqui criaria uma segunda
+          // ação de conversão na conta e contaria a mesma venda duas vezes.
+          // O gtag segue carregado (loadGoogleAdsPixel) para remarketing/públicos.
           break;
 
         case "google_analytics":

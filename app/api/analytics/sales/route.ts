@@ -57,51 +57,44 @@ export async function GET(request: Request) {
     const startDate = monthsBR[0].start;
     const endDate = monthsBR[monthsBR.length - 1].end;
 
-    // Buscar apenas os dados necessários (sem customer para otimizar)
-    const orders = await prisma.order.findMany({
-      where: {
-        status: "paid",
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        id: true,
-        amount: true,
-        createdAt: true,
-        affiliateId: true,
-        affiliate: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        items: {
-          select: {
-            quantity: true,
-            price: true,
-            product: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+    // Todas as métricas são agregadas NO BANCO.
+    // A versão anterior trazia todos os pedidos do período (3.000+ linhas com
+    // joins) para somar no Node — ~1 MB por chamada, e a página chama esta
+    // rota 6 vezes. A query chegava a derrubar a conexão (P1017).
+    // Aqui o Postgres devolve dezenas de linhas já somadas.
+
+    // Datas em ISO para uso direto no SQL
+    const ini = startDate.toISOString();
+    const fim = endDate.toISOString();
+
+    // 1) Métricas do período + por mês (agrupando no fuso de São Paulo)
+    const porMes = await prisma.$queryRaw<
+      { mes: string; vendas: number; receita_cents: number }[]
+    >`
+      SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS mes,
+             COUNT(*)::int AS vendas,
+             COALESCE(SUM(amount), 0)::bigint AS receita_cents
+      FROM "Order"
+      WHERE status = 'paid' AND "createdAt" >= ${ini}::timestamp AND "createdAt" <= ${fim}::timestamp
+      GROUP BY 1
+    `;
+
+    const mapaMes = new Map(
+      porMes.map((r) => [r.mes, { vendas: Number(r.vendas), receita: Number(r.receita_cents) }])
+    );
+
+    // Constrói a série preenchendo meses sem venda com zero
+    const salesByMonthArray = monthsBR.map((m) => {
+      const chaveISO = formatInTimeZone(m.start, TZ, "yyyy-MM");
+      const d = mapaMes.get(chaveISO) ?? { vendas: 0, receita: 0 };
+      return { month: m.key, sales: d.vendas, revenue: d.receita / 100 };
     });
 
-    // Métricas de todo o período (sem filtro de data) para os cards de resumo.
-    // aggregate() calcula count+sum no Postgres e devolve só 2 números,
-    // em vez de trazer todas as linhas para o Node (escala melhor e gasta menos compute).
+    const totalSales = salesByMonthArray.reduce((s, m) => s + m.sales, 0);
+    const totalRevenue = salesByMonthArray.reduce((s, m) => s + m.revenue, 0) * 100;
+    const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
+
+    // 2) Métricas de todo o período
     const allTimeAgg = await prisma.order.aggregate({
       where: { status: "paid" },
       _count: { _all: true },
@@ -109,188 +102,128 @@ export async function GET(request: Request) {
     });
     const allTimeTotalSales = allTimeAgg._count._all;
     const allTimeTotalRevenue = allTimeAgg._sum.amount ?? 0;
-    const allTimeAverageTicket = allTimeTotalSales > 0 ? allTimeTotalRevenue / allTimeTotalSales : 0;
+    const allTimeAverageTicket =
+      allTimeTotalSales > 0 ? allTimeTotalRevenue / allTimeTotalSales : 0;
 
-    // Processar dados para métricas do período selecionado
-    const totalSales = orders.length;
-    const totalRevenue = orders.reduce((sum, order) => sum + order.amount, 0);
-    const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
-
-    // Vendas por mês
-    const salesByMonth: { [key: string]: { count: number; revenue: number } } = {};
-
-    monthsBR.forEach(({ key }) => {
-      salesByMonth[key] = { count: 0, revenue: 0 };
-    });
-
-    orders.forEach((order) => {
-      const monthKey = monthKeyBR(order.createdAt);
-      if (salesByMonth[monthKey]) {
-        salesByMonth[monthKey].count += 1;
-        salesByMonth[monthKey].revenue += order.amount;
-      }
-    });
-
-    // Produtos mais vendidos
-    const productSales: { [key: string]: { name: string; count: number; revenue: number } } = {};
-
-    // Função para agrupar produtos pelo nome base
-    const getGroupedProductName = (productName: string): string => {
-      // Padrão: pega apenas "Trader XXXXX" ou "Trader DIRETO XX"
-      // Exemplos:
-      // "Trader 50K - Profit One | THP" → "Trader 50K"
-      // "Trader DIRETO 5 - Profit Pro | THP" → "Trader DIRETO 5"
-      // "Trader 100K - Profit One + Flash Trader + Planilha de Aprovação" → "Trader 100K"
-
-      const match = productName.match(/^(Trader\s+(?:DIRETO\s+)?\d+K?)/i);
-
-      if (match) {
-        return match[1];
-      }
-
-      // Se não corresponder ao padrão, retorna o nome original
-      return productName;
-    };
-
-    orders.forEach((order) => {
-      order.items.forEach((item) => {
-        const originalProductName = item.product.name;
-        const groupedProductName = getGroupedProductName(originalProductName);
-
-        // Usar o nome agrupado como chave para consolidar variantes
-        if (!productSales[groupedProductName]) {
-          productSales[groupedProductName] = {
-            name: groupedProductName,
-            count: 0,
-            revenue: 0,
-          };
-        }
-
-        productSales[groupedProductName].count += item.quantity;
-        productSales[groupedProductName].revenue += item.price * item.quantity;
-      });
-    });
-
-    // Converter para arrays
-    const salesByMonthArray = Object.entries(salesByMonth).map(([month, data]) => ({
-      month,
-      sales: data.count,
-      revenue: data.revenue / 100, // Converter de centavos para reais
-    }));
-
-    const productsSoldArray = Object.entries(productSales)
-      .map(([id, data]) => ({
-        id,
-        name: data.name,
-        quantity: data.count,
-        revenue: data.revenue / 100,
-      }))
-      .sort((a, b) => b.quantity - a.quantity);
-
-    // Calcular crescimento: mês anterior vs mês retrasado
-    // Exemplo: Se estamos em Janeiro, compara Dezembro com Novembro
+    // 3) Crescimento: mês anterior vs retrasado
     const lastMonth = monthsBR[monthsBR.length - 2]?.key ?? "";
     const twoMonthsAgo = monthsBR[monthsBR.length - 3]?.key ?? "";
+    const achaMes = (k: string) => salesByMonthArray.find((m) => m.month === k);
+    const lastMonthSales = achaMes(lastMonth)?.sales ?? 0;
+    const twoMonthsAgoSales = achaMes(twoMonthsAgo)?.sales ?? 0;
+    const lastMonthRevenue = achaMes(lastMonth)?.revenue ?? 0;
+    const twoMonthsAgoRevenue = achaMes(twoMonthsAgo)?.revenue ?? 0;
 
-    // Crescimento em quantidade
-    const lastMonthSales = salesByMonth[lastMonth]?.count || 0;
-    const twoMonthsAgoSales = salesByMonth[twoMonthsAgo]?.count || 0;
+    const salesGrowthRate =
+      twoMonthsAgoSales > 0 ? ((lastMonthSales - twoMonthsAgoSales) / twoMonthsAgoSales) * 100 : 0;
+    const revenueGrowthRate =
+      twoMonthsAgoRevenue > 0 ? ((lastMonthRevenue - twoMonthsAgoRevenue) / twoMonthsAgoRevenue) * 100 : 0;
 
-    const salesGrowthRate = twoMonthsAgoSales > 0
-      ? ((lastMonthSales - twoMonthsAgoSales) / twoMonthsAgoSales) * 100
-      : 0;
+    // 4) Produtos vendidos — soma por produto no SQL (poucas dezenas de linhas)
+    //    e agrupa o nome em JS, reaproveitando a regra já validada.
+    const produtos = await prisma.$queryRaw<
+      { nome: string; quantidade: number; receita_cents: number }[]
+    >`
+      SELECT p.name AS nome,
+             SUM(oi.quantity)::int AS quantidade,
+             COALESCE(SUM(oi.price * oi.quantity), 0)::bigint AS receita_cents
+      FROM "Order" o
+      JOIN "OrderItem" oi ON oi."orderId" = o.id
+      JOIN "Product" p ON p.id = oi."productId"
+      WHERE o.status = 'paid' AND o."createdAt" >= ${ini}::timestamp AND o."createdAt" <= ${fim}::timestamp
+      GROUP BY p.name
+    `;
 
-    // Crescimento em faturamento
-    const lastMonthRevenue = salesByMonth[lastMonth]?.revenue || 0;
-    const twoMonthsAgoRevenue = salesByMonth[twoMonthsAgo]?.revenue || 0;
+    // Consolida variantes: "Trader 100K - Profit One | THP" -> "Trader 100K"
+    const getGroupedProductName = (productName: string): string => {
+      const match = productName.match(/^(Trader\s+(?:DIRETO\s+)?\d+K?)/i);
+      return match ? match[1] : productName;
+    };
 
-    const revenueGrowthRate = twoMonthsAgoRevenue > 0
-      ? ((lastMonthRevenue - twoMonthsAgoRevenue) / twoMonthsAgoRevenue) * 100
-      : 0;
+    const agrupados: Record<string, { name: string; quantity: number; revenue: number }> = {};
+    for (const p of produtos) {
+      const chave = getGroupedProductName(p.nome);
+      agrupados[chave] ??= { name: chave, quantity: 0, revenue: 0 };
+      agrupados[chave].quantity += Number(p.quantidade);
+      agrupados[chave].revenue += Number(p.receita_cents);
+    }
 
-    // Análise de vendas com/sem afiliação por mês
-    const affiliateSalesByMonth: { [key: string]: { withAffiliate: { count: number; revenue: number }, withoutAffiliate: { count: number; revenue: number } } } = {};
+    const productsSoldArray = Object.values(agrupados)
+      .map((d) => ({ id: d.name, name: d.name, quantity: d.quantity, revenue: d.revenue / 100 }))
+      .sort((a, b) => b.quantity - a.quantity);
 
-    // Inicializar todos os meses
-    monthsBR.forEach(({ key }) => {
-      affiliateSalesByMonth[key] = {
-        withAffiliate: { count: 0, revenue: 0 },
-        withoutAffiliate: { count: 0, revenue: 0 },
+    // 5) Com vs sem afiliado — totais e série mensal
+    const afiliadoPorMes = await prisma.$queryRaw<
+      { mes: string; com_afiliado: boolean; vendas: number; receita_cents: number }[]
+    >`
+      SELECT to_char(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS mes,
+             ("affiliateId" IS NOT NULL) AS com_afiliado,
+             COUNT(*)::int AS vendas,
+             COALESCE(SUM(amount), 0)::bigint AS receita_cents
+      FROM "Order"
+      WHERE status = 'paid' AND "createdAt" >= ${ini}::timestamp AND "createdAt" <= ${fim}::timestamp
+      GROUP BY 1, 2
+    `;
+
+    const mapaAfiliado = new Map<string, { com: { c: number; r: number }; sem: { c: number; r: number } }>();
+    for (const r of afiliadoPorMes) {
+      const atual = mapaAfiliado.get(r.mes) ?? { com: { c: 0, r: 0 }, sem: { c: 0, r: 0 } };
+      const alvo = r.com_afiliado ? atual.com : atual.sem;
+      alvo.c += Number(r.vendas);
+      alvo.r += Number(r.receita_cents);
+      mapaAfiliado.set(r.mes, atual);
+    }
+
+    const affiliateStatsArray = monthsBR.map((m) => {
+      const chaveISO = formatInTimeZone(m.start, TZ, "yyyy-MM");
+      const d = mapaAfiliado.get(chaveISO) ?? { com: { c: 0, r: 0 }, sem: { c: 0, r: 0 } };
+      return {
+        month: m.key,
+        withAffiliate: d.com.c,
+        withAffiliateRevenue: d.com.r / 100,
+        withoutAffiliate: d.sem.c,
+        withoutAffiliateRevenue: d.sem.r / 100,
       };
     });
 
-    // Agrupar por mês e tipo
-    orders.forEach((order) => {
-      const monthKey = monthKeyBR(order.createdAt);
-      if (affiliateSalesByMonth[monthKey]) {
-        if (order.affiliateId !== null) {
-          affiliateSalesByMonth[monthKey].withAffiliate.count += 1;
-          affiliateSalesByMonth[monthKey].withAffiliate.revenue += order.amount;
-        } else {
-          affiliateSalesByMonth[monthKey].withoutAffiliate.count += 1;
-          affiliateSalesByMonth[monthKey].withoutAffiliate.revenue += order.amount;
-        }
-      }
-    });
-
-    // Converter para array
-    const affiliateStatsArray = Object.entries(affiliateSalesByMonth).map(([month, data]) => ({
-      month,
-      withAffiliate: data.withAffiliate.count,
-      withAffiliateRevenue: data.withAffiliate.revenue / 100,
-      withoutAffiliate: data.withoutAffiliate.count,
-      withoutAffiliateRevenue: data.withoutAffiliate.revenue / 100,
-    }));
-
-    // Totais gerais
-    const withAffiliate = orders.filter(order => order.affiliateId !== null);
-    const withoutAffiliate = orders.filter(order => order.affiliateId === null);
+    const totComAfiliado = affiliateStatsArray.reduce(
+      (a, m) => ({ c: a.c + m.withAffiliate, r: a.r + m.withAffiliateRevenue }), { c: 0, r: 0 }
+    );
+    const totSemAfiliado = affiliateStatsArray.reduce(
+      (a, m) => ({ c: a.c + m.withoutAffiliate, r: a.r + m.withoutAffiliateRevenue }), { c: 0, r: 0 }
+    );
 
     const affiliateStats = {
-      withAffiliate: {
-        count: withAffiliate.length,
-        revenue: withAffiliate.reduce((sum, order) => sum + order.amount, 0) / 100,
-      },
-      withoutAffiliate: {
-        count: withoutAffiliate.length,
-        revenue: withoutAffiliate.reduce((sum, order) => sum + order.amount, 0) / 100,
-      },
+      withAffiliate: { count: totComAfiliado.c, revenue: totComAfiliado.r },
+      withoutAffiliate: { count: totSemAfiliado.c, revenue: totSemAfiliado.r },
       byMonth: affiliateStatsArray,
     };
 
-    // Top afiliados por faturamento
-    const affiliateSales: { [key: string]: { name: string; email: string; revenue: number; count: number } } = {};
+    // 6) Top afiliados por receita
+    const topAfiliados = await prisma.$queryRaw<
+      { id: string; nome: string | null; email: string; receita_cents: number; vendas: number }[]
+    >`
+      SELECT a.id,
+             u.name AS nome,
+             u.email,
+             COALESCE(SUM(o.amount), 0)::bigint AS receita_cents,
+             COUNT(*)::int AS vendas
+      FROM "Order" o
+      JOIN "Affiliate" a ON a.id = o."affiliateId"
+      JOIN "User" u ON u.id = a."userId"
+      WHERE o.status = 'paid' AND o."createdAt" >= ${ini}::timestamp AND o."createdAt" <= ${fim}::timestamp
+      GROUP BY a.id, u.name, u.email
+      ORDER BY receita_cents DESC
+      LIMIT 10
+    `;
 
-    withAffiliate.forEach((order) => {
-      if (order.affiliate) {
-        const affiliateId = order.affiliate.id;
-        const affiliateName = order.affiliate.user.name || order.affiliate.user.email;
-        const affiliateEmail = order.affiliate.user.email;
-
-        if (!affiliateSales[affiliateId]) {
-          affiliateSales[affiliateId] = {
-            name: affiliateName,
-            email: affiliateEmail,
-            revenue: 0,
-            count: 0,
-          };
-        }
-
-        affiliateSales[affiliateId].revenue += order.amount;
-        affiliateSales[affiliateId].count += 1;
-      }
-    });
-
-    const topAffiliates = Object.entries(affiliateSales)
-      .map(([id, data]) => ({
-        id,
-        name: data.name,
-        email: data.email,
-        revenue: data.revenue / 100,
-        salesCount: data.count,
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10); // Top 10 afiliados
+    const topAffiliates = topAfiliados.map((a) => ({
+      id: a.id,
+      name: a.nome || a.email,
+      email: a.email,
+      revenue: Number(a.receita_cents) / 100,
+      salesCount: Number(a.vendas),
+    }));
 
     const responseData = {
       metrics: {

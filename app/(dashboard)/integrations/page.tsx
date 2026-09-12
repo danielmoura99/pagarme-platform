@@ -44,21 +44,6 @@ const integrations = [
     setupUrl: "/integrations/google-ads"
   },
   {
-    id: "rd-station",
-    name: "RD Station",
-    description: "Plataforma de marketing digital e automação de leads",
-    logo: "🚀", // Pode ser substituído por imagem real
-    status: "available", // available, connected, disabled
-    category: "Marketing",
-    features: [
-      "Sincronização automática de leads",
-      "Tracking de conversões",
-      "Segmentação por campanha",
-      "Automações de email marketing"
-    ],
-    setupUrl: "/integrations/rd-station"
-  },
-  {
     id: "mailchimp",
     name: "Mailchimp",
     description: "Plataforma de email marketing e automação",

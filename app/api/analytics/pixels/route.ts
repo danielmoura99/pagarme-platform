@@ -155,6 +155,7 @@ export async function GET(request: Request) {
             utmTerm: true,
             utmContent: true,
             referrer: true,
+            landingPage: true,
             gclid: true,
             gadCampaignId: true,
             customer: { select: { name: true, email: true, document: true } },
@@ -263,6 +264,9 @@ export async function GET(request: Request) {
           term: order?.utmTerm || null,
           content: order?.utmContent || null,
           referrer: order?.referrer || event.referrer || null,
+          // URL completa do checkout usada na compra — carrega produto,
+          // cupom, afiliado (ref) e UTMs. Vem do Order (confiável).
+          landingPage: order?.landingPage || event.landingPage || null,
           // Click ids: atribuição direta da plataforma, sem depender de UTM
           gclid: order?.gclid || null,
           gadCampaignId: order?.gadCampaignId || null,

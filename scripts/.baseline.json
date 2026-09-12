@@ -1,0 +1,184 @@
+{
+  "metrics": {
+    "totalSales": 3320,
+    "totalRevenue": 2304021.69,
+    "averageTicket": 693.9824367469879
+  },
+  "allTimeMetrics": {
+    "totalSales": 4095,
+    "totalRevenue": 3007773.68
+  },
+  "salesByMonth": [
+    {
+      "month": "Oct/25",
+      "sales": 172,
+      "revenue": 162863.24
+    },
+    {
+      "month": "Nov/25",
+      "sales": 130,
+      "revenue": 157400.39
+    },
+    {
+      "month": "Dec/25",
+      "sales": 239,
+      "revenue": 169487.37
+    },
+    {
+      "month": "Jan/26",
+      "sales": 157,
+      "revenue": 107442.02
+    },
+    {
+      "month": "Feb/26",
+      "sales": 130,
+      "revenue": 106338.08
+    },
+    {
+      "month": "Mar/26",
+      "sales": 636,
+      "revenue": 413132.45
+    },
+    {
+      "month": "Apr/26",
+      "sales": 404,
+      "revenue": 263835.75
+    },
+    {
+      "month": "May/26",
+      "sales": 306,
+      "revenue": 220630.19
+    },
+    {
+      "month": "Jun/26",
+      "sales": 427,
+      "revenue": 235884.31
+    },
+    {
+      "month": "Jul/26",
+      "sales": 197,
+      "revenue": 142873.61
+    },
+    {
+      "month": "Aug/26",
+      "sales": 440,
+      "revenue": 260815.51
+    },
+    {
+      "month": "Sep/26",
+      "sales": 82,
+      "revenue": 63318.77
+    }
+  ],
+  "productsSold": [
+    {
+      "name": "Trader DIRETO 5",
+      "quantity": 633,
+      "revenue": 222110.1
+    },
+    {
+      "name": "Trader 100K",
+      "quantity": 588,
+      "revenue": 149948.82
+    },
+    {
+      "name": "Trader 50K",
+      "quantity": 485,
+      "revenue": 82978.06
+    },
+    {
+      "name": "Trader 250K",
+      "quantity": 413,
+      "revenue": 245607
+    },
+    {
+      "name": "Trader DIRETO 20",
+      "quantity": 373,
+      "revenue": 411082.41
+    },
+    {
+      "name": "Trader 500K",
+      "quantity": 339,
+      "revenue": 447520.91
+    },
+    {
+      "name": "Trader DIRETO 25",
+      "quantity": 335,
+      "revenue": 552750.17
+    },
+    {
+      "name": "Trader DIRETO 10",
+      "quantity": 132,
+      "revenue": 111005.52
+    },
+    {
+      "name": "Black 1M | THP",
+      "quantity": 18,
+      "revenue": 79490
+    },
+    {
+      "name": "Planilha de Aprovação",
+      "quantity": 3,
+      "revenue": 149.7
+    },
+    {
+      "name": "Avaliação Black 1M | THP",
+      "quantity": 1,
+      "revenue": 2999
+    }
+  ],
+  "affiliateStats": {
+    "withAffiliate": {
+      "count": 983,
+      "revenue": 751873.62
+    },
+    "withoutAffiliate": {
+      "count": 2337,
+      "revenue": 1552148.07
+    }
+  },
+  "topAffiliates": [
+    {
+      "id": "cmf16mue300029nuqfjmyu7lo",
+      "name": "Isabella de Melo Noppeney",
+      "email": "isabellamvet@outlook.com",
+      "revenue": 292549.32,
+      "salesCount": 402
+    },
+    {
+      "id": "cm8pxai45000212mnz6whicik",
+      "name": "Armando Bernardes Duarte",
+      "email": "investimentos.armando@gmail.com",
+      "revenue": 195427.27,
+      "salesCount": 234
+    },
+    {
+      "id": "cmonf7icv0002v1amydpi2w28",
+      "name": "Kleber Lucas Souza Campos",
+      "email": "kleberlucas0123@gmail.com",
+      "revenue": 97041.48,
+      "salesCount": 134
+    },
+    {
+      "id": "cmf170m5n0007fu45ila0v5yl",
+      "name": "Débora de Jesus Silva Franco",
+      "email": "deborajsfranco@gmail.com",
+      "revenue": 96170.1,
+      "salesCount": 106
+    },
+    {
+      "id": "cmhwo2fuh000nw4qhi1q59vr2",
+      "name": "João Pedro Ximenes de Matos",
+      "email": "jpximenes.m@gmail.com",
+      "revenue": 58669.9,
+      "salesCount": 93
+    },
+    {
+      "id": "cm8pxai50000512mn8i1xfw66",
+      "name": "Carlos Otávio da Silva Júnior",
+      "email": "carlosotav25@hotmail.com",
+      "revenue": 12015.55,
+      "salesCount": 14
+    }
+  ]
+}

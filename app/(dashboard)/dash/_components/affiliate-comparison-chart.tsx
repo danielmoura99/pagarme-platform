@@ -1,7 +1,8 @@
 // app/(dashboard)/dash/_components/affiliate-comparison-chart.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSalesData } from "./use-sales-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart,
@@ -35,26 +36,10 @@ interface AffiliateStats {
 }
 
 export function AffiliateComparisonChart() {
-  const [stats, setStats] = useState<AffiliateStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: salesData, loading } = useSalesData();
+  const stats = salesData?.affiliateStats ?? null;
   const [viewMode, setViewMode] = useState<"quantity" | "revenue">("quantity");
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/analytics/sales?months=12`);
-        const result = await response.json();
-        setStats(result.affiliateStats || null);
-      } catch (error) {
-        console.error("Error fetching affiliate stats:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchData();
-  }, []);
 
   if (loading) {
     return (
