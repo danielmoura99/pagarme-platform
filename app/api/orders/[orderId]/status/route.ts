@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/orders/[orderId]/status/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function monitoredGET(
   req: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
@@ -34,3 +35,5 @@ export async function GET(
     return new NextResponse("Error fetching order status", { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/orders/[orderId]/status", monitoredGET);

@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/coupons/[couponId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(
+async function monitoredDELETE(
   req: Request,
   { params }: { params: { couponId: string } }
 ) {
@@ -60,3 +61,5 @@ export async function DELETE(
     );
   }
 }
+
+export const DELETE = withDbMonitoring("DELETE /api/coupons/[couponId]", monitoredDELETE);

@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/recipients/all/route.ts
 import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
-export async function GET() {
+async function monitoredGET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -25,3 +26,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/recipients/all", monitoredGET);

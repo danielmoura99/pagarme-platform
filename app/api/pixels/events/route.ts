@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/pixels/events/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import { PixelEventDeduplicator } from "@/lib/pixel-deduplication";
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     const body = await request.json();
     const headersList = headers();
@@ -92,3 +93,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withDbMonitoring("POST /api/pixels/events", monitoredPOST);

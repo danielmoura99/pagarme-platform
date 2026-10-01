@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/analytics/sales/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -41,7 +42,7 @@ function buildMonthsBR(months: number) {
   return list;
 }
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -255,3 +256,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/analytics/sales", monitoredGET);

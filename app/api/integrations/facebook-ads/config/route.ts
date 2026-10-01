@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/integrations/facebook-ads/config/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -7,7 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function monitoredGET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -47,7 +48,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -134,3 +135,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Erro ao salvar configuração" }, { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/integrations/facebook-ads/config", monitoredGET);
+
+export const POST = withDbMonitoring("POST /api/integrations/facebook-ads/config", monitoredPOST);

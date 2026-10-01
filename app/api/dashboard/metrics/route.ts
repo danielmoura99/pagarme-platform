@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/dashboard/metrics/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     // Verificar autenticação e obter sessão
     const session = await getServerSession(authOptions);
@@ -110,3 +111,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/dashboard/metrics", monitoredGET);

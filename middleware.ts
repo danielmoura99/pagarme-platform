@@ -14,6 +14,7 @@ export default withAuth(
 
     // Rotas restritas apenas para admins
     const adminOnlyPaths = [
+      "/monitoring",
       "/products",
       "/checkout-settings",
       "/coupons",

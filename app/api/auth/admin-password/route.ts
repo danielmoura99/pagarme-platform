@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/auth/admin-password/route.ts
 import { NextResponse } from "next/server";
 
@@ -40,7 +41,7 @@ function recordAttempt(ip: string, success: boolean) {
   }
 }
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     const { password } = await request.json();
     const clientIP = getClientIP(request);
@@ -129,7 +130,7 @@ export async function POST(request: Request) {
 }
 
 // Endpoint para verificar status de bloqueio (opcional)
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     const clientIP = getClientIP(request);
     const blocked = isBlocked(clientIP);
@@ -151,3 +152,6 @@ export async function GET(request: Request) {
     );
   }
 }
+export const POST = withDbMonitoring("POST /api/auth/admin-password", monitoredPOST);
+
+export const GET = withDbMonitoring("GET /api/auth/admin-password", monitoredGET);

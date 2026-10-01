@@ -1,5 +1,26 @@
 //schema local
 
+model DbMonitorSample {
+  id          BigInt   @id @default(autoincrement())
+  recordedAt  DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  environment String
+  route       String
+  sampleRate  Float    @map("sample_rate")
+  failed      Boolean
+  operations  Json
+
+  @@index([recordedAt], map: "db_monitor_samples_recorded_at_idx")
+  @@map("db_monitor_samples")
+}
+
+model DbMonitorNeonCache {
+  cacheKey  String   @id @map("cache_key")
+  fetchedAt DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+  payload   Json
+
+  @@map("db_monitor_neon_cache")
+}
+
 generator client {
   provider = "prisma-client-js"
 }

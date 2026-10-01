@@ -1,9 +1,10 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/db";
 
-export async function GET(req: NextRequest) {
+async function monitoredGET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -41,3 +42,5 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/user/sessions", monitoredGET);

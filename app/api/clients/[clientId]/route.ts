@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/clients/[clientId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
-export async function GET(
+async function monitoredGET(
   request: Request,
   { params }: { params: { clientId: string } }
 ) {
@@ -148,3 +149,4 @@ export async function GET(
     );
   }
 }
+export const GET = withDbMonitoring("GET /api/clients/[clientId]", monitoredGET);

@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/checkout/route.ts
 import { NextResponse } from "next/server";
@@ -247,7 +248,7 @@ async function computeServerAmount(
   return total;
 }
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     // Rate limiting: 10 checkouts por minuto por IP
     const clientIP = getClientIP(request);
@@ -919,3 +920,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withDbMonitoring("POST /api/checkout", monitoredPOST);

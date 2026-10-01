@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/cron/sync-facebook-ads/route.ts
 // Chamado pelo Vercel Cron Jobs (vercel.json) a cada 6 horas
 import { NextResponse } from "next/server";
@@ -12,7 +13,7 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // segundos (Vercel Pro/Hobby limit)
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   // Validar CRON_SECRET para evitar chamadas não autorizadas
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
@@ -229,3 +230,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/cron/sync-facebook-ads", monitoredGET);

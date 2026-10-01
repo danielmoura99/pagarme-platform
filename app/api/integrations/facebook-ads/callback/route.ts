@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/integrations/facebook-ads/callback/route.ts
 import { NextResponse } from "next/server";
 import { exchangeCodeForToken } from "@/lib/facebook-ads";
@@ -6,7 +7,7 @@ import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
@@ -75,3 +76,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/integrations/facebook-ads/callback", monitoredGET);

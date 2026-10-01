@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/products/[productId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function monitoredGET(
   req: Request,
   { params }: { params: Promise<{ productId: string }> }
 ) {
@@ -62,7 +63,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function monitoredPATCH(
   req: Request,
   { params }: { params: Promise<{ productId: string }> }
 ) {
@@ -102,3 +103,7 @@ export async function PATCH(
     return new NextResponse("Internal error", { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/products/[productId]", monitoredGET);
+
+export const PATCH = withDbMonitoring("PATCH /api/products/[productId]", monitoredPATCH);

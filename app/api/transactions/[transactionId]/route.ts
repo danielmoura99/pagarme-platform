@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/transactions/[transactionId]/route.ts
 import { NextResponse } from "next/server";
@@ -8,7 +9,7 @@ import { selectCharge, selectLastTransaction } from "@/lib/pagarme";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function monitoredGET(
   req: Request,
   { params }: { params: Promise<{ transactionId: string }> }
 ) {
@@ -191,3 +192,5 @@ export async function GET(
     });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/transactions/[transactionId]", monitoredGET);

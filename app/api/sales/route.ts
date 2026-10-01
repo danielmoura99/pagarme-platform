@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/sales/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -7,7 +8,7 @@ import { maskDocument, maskPhone } from "@/lib/mask";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -133,3 +134,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/sales", monitoredGET);

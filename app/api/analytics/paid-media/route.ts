@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/analytics/paid-media/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -21,7 +22,7 @@ interface CampaignRow {
   revenue: number;
 }
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -192,3 +193,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/analytics/paid-media", monitoredGET);

@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/user/affiliate/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
-export async function GET() {
+async function monitoredGET() {
   try {
     // Verificar autenticação
     const session = await getServerSession(authOptions);
@@ -48,3 +49,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/user/affiliate", monitoredGET);

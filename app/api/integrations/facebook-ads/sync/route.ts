@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/integrations/facebook-ads/sync/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -12,7 +13,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "admin") {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
@@ -199,3 +200,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+export const POST = withDbMonitoring("POST /api/integrations/facebook-ads/sync", monitoredPOST);

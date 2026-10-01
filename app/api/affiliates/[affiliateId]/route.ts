@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/affiliates/[affiliateId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -7,7 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function monitoredGET(
   request: Request,
   { params }: { params: Promise<{ affiliateId: string }> }
 ) {
@@ -42,7 +43,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
+async function monitoredPUT(
   request: Request,
   { params }: { params: Promise<{ affiliateId: string }> }
 ) {
@@ -107,7 +108,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function monitoredDELETE(
   request: Request,
   { params }: { params: Promise<{ affiliateId: string }> }
 ) {
@@ -171,3 +172,9 @@ export async function DELETE(
     return new NextResponse("Internal error", { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/affiliates/[affiliateId]", monitoredGET);
+
+export const PUT = withDbMonitoring("PUT /api/affiliates/[affiliateId]", monitoredPUT);
+
+export const DELETE = withDbMonitoring("DELETE /api/affiliates/[affiliateId]", monitoredDELETE);

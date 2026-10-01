@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/integrations/facebook-ads/disconnect/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+async function monitoredPOST() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -36,3 +37,5 @@ export async function POST() {
     return NextResponse.json({ error: "Erro ao desconectar" }, { status: 500 });
   }
 }
+
+export const POST = withDbMonitoring("POST /api/integrations/facebook-ads/disconnect", monitoredPOST);

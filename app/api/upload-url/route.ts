@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/upload-url/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: NextRequest) {
+async function monitoredPOST(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
@@ -67,9 +68,13 @@ export async function POST(request: NextRequest) {
 }
 
 // Este endpoint não precisa mais de uma versão GET
-export async function GET() {
+async function monitoredGET() {
   return NextResponse.json(
     { error: "Este endpoint só aceita requisições POST" },
     { status: 405 }
   );
 }
+
+export const POST = withDbMonitoring("POST /api/upload-url", monitoredPOST);
+
+export const GET = withDbMonitoring("GET /api/upload-url", monitoredGET);

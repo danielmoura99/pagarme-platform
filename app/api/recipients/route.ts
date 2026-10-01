@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/recipients/route.ts
 import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
@@ -7,7 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
@@ -139,3 +140,7 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const POST = withDbMonitoring("POST /api/recipients", monitoredPOST);
+
+export const GET = withDbMonitoring("GET /api/recipients", monitoredGET);

@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/integrations/facebook-ads/connect/route.ts
 import { NextResponse } from "next/server";
 import { getOAuthUrl } from "@/lib/facebook-ads";
@@ -7,7 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function monitoredGET() {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "admin") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
@@ -35,3 +36,5 @@ export async function GET() {
     return NextResponse.json({ error: "Erro ao gerar URL de autorização" }, { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/integrations/facebook-ads/connect", monitoredGET);

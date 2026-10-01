@@ -1,9 +1,10 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { prisma } from "@/lib/db";
 
-export async function POST(req: NextRequest) {
+async function monitoredPOST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -30,3 +31,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withDbMonitoring("POST /api/user/logout-all", monitoredPOST);

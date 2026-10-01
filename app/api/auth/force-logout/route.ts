@@ -1,8 +1,9 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/auth/force-logout/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET() {
+async function monitoredGET() {
   try {
     const cookieStore = cookies();
 
@@ -30,3 +31,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/auth/force-logout", monitoredGET);

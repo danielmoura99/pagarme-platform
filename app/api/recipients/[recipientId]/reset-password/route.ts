@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/recipients/[recipientId]/reset-password/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -23,7 +24,7 @@ function generateSecurePassword(): string {
   return password;
 }
 
-export async function POST(
+async function monitoredPOST(
   req: Request,
   { params }: { params: { recipientId: string } }
 ) {
@@ -83,6 +84,10 @@ export async function POST(
 }
 
 // GET não deve resetar senhas — retornar 405
-export async function GET() {
+async function monitoredGET() {
   return new NextResponse("Método não permitido", { status: 405 });
 }
+
+export const POST = withDbMonitoring("POST /api/recipients/[recipientId]/reset-password", monitoredPOST);
+
+export const GET = withDbMonitoring("GET /api/recipients/[recipientId]/reset-password", monitoredGET);

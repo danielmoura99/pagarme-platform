@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/transactions/route.ts
 import { NextResponse } from "next/server";
@@ -8,7 +9,7 @@ import { maskDocument, maskPhone } from "@/lib/mask";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     // Verificar autenticação e obter sessão
     const session = await getServerSession(authOptions);
@@ -185,3 +186,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/transactions", monitoredGET);

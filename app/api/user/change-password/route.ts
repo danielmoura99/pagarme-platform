@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/user/change-password/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -8,7 +9,7 @@ import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+async function monitoredPOST(req: Request) {
   try {
     // Rate limiting: 5 tentativas por 15 minutos
     const clientIP = getClientIP(req);
@@ -111,3 +112,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withDbMonitoring("POST /api/user/change-password", monitoredPOST);

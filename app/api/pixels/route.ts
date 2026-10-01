@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/pixels/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -60,3 +61,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Erro ao criar pixel" }, { status: 500 });
   }
 }
+
+export const POST = withDbMonitoring("POST /api/pixels", monitoredPOST);

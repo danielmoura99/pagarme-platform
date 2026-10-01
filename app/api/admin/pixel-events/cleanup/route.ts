@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/admin/pixel-events/cleanup/route.ts
 import { NextResponse } from "next/server";
 import { PixelEventDeduplicator } from "@/lib/pixel-deduplication";
@@ -7,7 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "admin") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user || session.user.role !== "admin") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
@@ -120,3 +121,6 @@ export async function GET(request: Request) {
     );
   }
 }
+export const POST = withDbMonitoring("POST /api/admin/pixel-events/cleanup", monitoredPOST);
+
+export const GET = withDbMonitoring("GET /api/admin/pixel-events/cleanup", monitoredGET);

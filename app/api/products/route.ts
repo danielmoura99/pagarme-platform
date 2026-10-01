@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/products/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+async function monitoredGET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const active = searchParams.get("active") === "true";
@@ -41,3 +42,5 @@ export async function GET(req: Request) {
     return new NextResponse("Internal error", { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/products", monitoredGET);

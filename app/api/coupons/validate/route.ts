@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/coupons/validate/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -5,7 +6,7 @@ import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+async function monitoredGET(req: Request) {
   try {
     // Rate limiting: 20 validações por 5 minutos por IP (prevenir brute force de cupons)
     const clientIP = getClientIP(req);
@@ -77,3 +78,5 @@ export async function GET(req: Request) {
     return new NextResponse("Internal error", { status: 500 });
   }
 }
+
+export const GET = withDbMonitoring("GET /api/coupons/validate", monitoredGET);

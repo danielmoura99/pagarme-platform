@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -24,7 +25,7 @@ function verifyWebhookSignature(body: string, signature: string | null, secret: 
   }
 }
 
-export async function POST(req: Request) {
+async function monitoredPOST(req: Request) {
   try {
     // Obter o corpo da requisição como texto (necessário para verificação HMAC)
     const body = await req.text();
@@ -598,3 +599,5 @@ async function uploadGoogleAdsConversion(order: any) {
     console.error("[GOOGLE_ADS_ERROR] Falha inesperada:", error);
   }
 }
+
+export const POST = withDbMonitoring("POST /api/webhooks/pagarme", monitoredPOST);

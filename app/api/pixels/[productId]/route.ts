@@ -1,8 +1,9 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/pixels/[productId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export async function GET(
+async function monitoredGET(
   request: Request,
   { params }: { params: { productId: string } }
 ) {
@@ -37,3 +38,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/pixels/[productId]", monitoredGET);

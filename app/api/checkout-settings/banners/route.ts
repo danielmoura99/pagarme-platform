@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/checkout-settings/banners/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function monitoredGET() {
   try {
     const settings = await prisma.checkoutSettings.findFirst({
       where: {
@@ -50,7 +51,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
@@ -125,3 +126,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/checkout-settings/banners", monitoredGET);
+
+export const POST = withDbMonitoring("POST /api/checkout-settings/banners", monitoredPOST);

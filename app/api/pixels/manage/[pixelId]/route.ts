@@ -1,10 +1,11 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/pixels/manage/[pixelId]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
-export async function PATCH(
+async function monitoredPATCH(
   request: Request,
   { params }: { params: { pixelId: string } }
 ) {
@@ -38,7 +39,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function monitoredDELETE(
   request: Request,
   { params }: { params: { pixelId: string } }
 ) {
@@ -61,3 +62,7 @@ export async function DELETE(
     );
   }
 }
+
+export const PATCH = withDbMonitoring("PATCH /api/pixels/manage/[pixelId]", monitoredPATCH);
+
+export const DELETE = withDbMonitoring("DELETE /api/pixels/manage/[pixelId]", monitoredDELETE);

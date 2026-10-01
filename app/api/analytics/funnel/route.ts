@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // app/api/analytics/funnel/route.ts
 import { NextResponse } from "next/server";
@@ -7,7 +8,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+async function monitoredGET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -123,3 +124,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/analytics/funnel", monitoredGET);

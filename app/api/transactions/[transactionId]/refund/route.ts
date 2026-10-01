@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/transactions/[transactionId]/refund/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
+async function monitoredPOST(
   req: Request,
   { params }: { params: Promise<{ transactionId: string }> }
 ) {
@@ -75,3 +76,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withDbMonitoring("POST /api/transactions/[transactionId]/refund", monitoredPOST);

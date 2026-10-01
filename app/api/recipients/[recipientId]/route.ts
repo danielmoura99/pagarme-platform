@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/recipients/[recipientId]/route.ts
 import { NextResponse } from "next/server";
 import { pagarme } from "@/lib/pagarme";
@@ -6,7 +7,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function monitoredGET(
   request: Request,
   { params }: { params: Promise<{ recipientId: string }> }
 ) {
@@ -28,7 +29,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
+async function monitoredPUT(
   request: Request,
   { params }: { params: Promise<{ recipientId: string }> }
 ) {
@@ -51,7 +52,7 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
+async function monitoredDELETE(
   request: Request,
   { params }: { params: Promise<{ recipientId: string }> }
 ) {
@@ -75,3 +76,9 @@ export async function DELETE(
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/recipients/[recipientId]", monitoredGET);
+
+export const PUT = withDbMonitoring("PUT /api/recipients/[recipientId]", monitoredPUT);
+
+export const DELETE = withDbMonitoring("DELETE /api/recipients/[recipientId]", monitoredDELETE);

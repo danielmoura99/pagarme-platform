@@ -32,6 +32,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env
+.env.*
+!.env.example
+!.env.*.example
+
+# Local Neon usage exports and one-off investigation scripts
+/neon-usage-*.csv
+/neon-usage-*.json
+/scripts/analisar-trafego.ts
+/scripts/diag-network.ts
+/scripts/medir-sessao.ts
 
 # vercel
 .vercel

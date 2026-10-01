@@ -1,3 +1,4 @@
+import { withDbMonitoring } from "@/lib/monitoring/route";
 // app/api/integrations/google-ads/config/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -7,7 +8,7 @@ import { validateGoogleAdsCredentials } from "@/lib/tracking/google-ads-api";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function monitoredGET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -60,7 +61,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function monitoredPOST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || session.user.role !== "admin") {
@@ -140,3 +141,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const GET = withDbMonitoring("GET /api/integrations/google-ads/config", monitoredGET);
+
+export const POST = withDbMonitoring("POST /api/integrations/google-ads/config", monitoredPOST);
