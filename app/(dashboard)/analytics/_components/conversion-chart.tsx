@@ -14,6 +14,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { buscarAnalyticsPixels } from "./analytics-cache";
 
 interface ChartData {
   charts: {
@@ -42,8 +43,7 @@ export function ConversionChart({ fromDate }: { fromDate?: string }) {
     try {
       const params = new URLSearchParams();
       if (fromDate) params.set("from", fromDate);
-      const response = await fetch(`/api/analytics/pixels?${params}`);
-      const result = await response.json();
+      const { data: result } = await buscarAnalyticsPixels(params.toString());
       setData(result);
     } catch (error) {
       console.error("Failed to fetch chart data:", error);

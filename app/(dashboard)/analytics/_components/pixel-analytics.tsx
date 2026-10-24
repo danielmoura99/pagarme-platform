@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, Eye, ShoppingCart, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { buscarAnalyticsPixels } from "./analytics-cache";
 
 interface AnalyticsData {
   summary: {
@@ -43,10 +44,9 @@ export function PixelAnalytics({ fromDate, toDate }: { fromDate?: string; toDate
       const params = new URLSearchParams();
       if (fromDate) params.set("from", fromDate);
       if (toDate) params.set("to", toDate);
-      const response = await fetch(`/api/analytics/pixels?${params}`);
-      const result = await response.json();
+      const { ok, data: result } = await buscarAnalyticsPixels(params.toString());
 
-      if (response.ok) {
+      if (ok) {
         setData(result);
       } else {
         // Se a API retornou um erro estruturado, usar os dados padrão

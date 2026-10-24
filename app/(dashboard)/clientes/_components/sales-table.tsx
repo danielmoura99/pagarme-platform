@@ -31,6 +31,7 @@ import { useDateRange } from "../../_components/date-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { buscarComCache } from "@/lib/fetch-cache";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -202,15 +203,19 @@ export function SalesTable() {
         queryParams.append("affiliate", affiliateFilter);
       }
 
-      const response = await fetch(`/api/sales?${queryParams.toString()}`);
+      // Via cache: a listagem é só leitura, e repetir a mesma consulta em
+      // menos de um minuto impedia o banco de suspender. As exportações
+      // abaixo seguem sem cache, sempre buscando dados frescos.
+      const { ok, data } = await buscarComCache(
+        `/api/sales?${queryParams.toString()}`
+      );
 
-      if (!response.ok) {
+      if (!ok) {
         throw new Error("Failed to fetch sales");
       }
 
-      const data: SalesResponse = await response.json();
-      setSales(data.sales);
-      setPagination(data.pagination);
+      setSales((data as SalesResponse).sales);
+      setPagination((data as SalesResponse).pagination);
     } catch (error) {
       console.error("Error fetching sales:", error);
       setSales([]);

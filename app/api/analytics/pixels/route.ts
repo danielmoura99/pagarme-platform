@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { maskDocument } from "@/lib/mask";
+import { bloquearSeExterno } from "@/lib/mesma-origem";
 
 export const dynamic = "force-dynamic";
 
@@ -118,14 +119,26 @@ async function monitoredGET(request: Request) {
     `;
     const pageIds = pageRows.map((r) => r.id);
 
+    // Apenas os campos consumidos na montagem de `leadEvents`, mais abaixo.
+    // O `include` anterior trazia a linha inteira do PixelEventLog —
+    // userAgent, ipAddress, sessionId, term e content viajavam sem uso.
     const leadEventsRaw = pageIds.length
       ? await prisma.pixelEventLog.findMany({
           where: { id: { in: pageIds } },
-          include: {
+          select: {
+            id: true,
+            eventType: true,
+            eventData: true,
+            orderId: true,
+            createdAt: true,
+            source: true,
+            campaign: true,
+            medium: true,
+            referrer: true,
+            landingPage: true,
             pixelConfig: {
               select: {
                 platform: true,
-                pixelId: true,
                 product: { select: { name: true } },
               },
             },
@@ -296,4 +309,10 @@ async function monitoredGET(request: Request) {
   }
 }
 
-export const GET = withDbMonitoring("GET /api/analytics/pixels", monitoredGET);
+const monitoredPixelsGET = withDbMonitoring("GET /api/analytics/pixels", monitoredGET);
+
+export async function GET(request: Request) {
+  const externo = bloquearSeExterno(request, "/api/analytics/pixels");
+  if (externo) return externo;
+  return monitoredPixelsGET(request);
+}

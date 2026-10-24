@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, TrendingUp, TrendingDown } from "lucide-react";
+import { buscarAnalyticsPixels } from "./analytics-cache";
 
 interface PeriodData {
   events: number;
@@ -36,14 +37,16 @@ export function PeriodComparison({ fromDate }: { fromDate?: string }) {
       const currentParams = new URLSearchParams();
       if (fromDate) currentParams.set("from", fromDate);
       else currentParams.set("days", String(days));
-      const currentResponse = await fetch(`/api/analytics/pixels?${currentParams}`);
-      const currentData = await currentResponse.json();
+      const { data: currentData } = await buscarAnalyticsPixels(
+        currentParams.toString()
+      );
 
       // Período anterior: só faz sentido quando não há fromDate
       const previousParams = new URLSearchParams();
       previousParams.set("days", String(days * 2));
-      const previousResponse = await fetch(`/api/analytics/pixels?${previousParams}`);
-      const previousData = await previousResponse.json();
+      const { data: previousData } = await buscarAnalyticsPixels(
+        previousParams.toString()
+      );
 
       // Calcular dados do período anterior (subtraindo o período atual)
       const comparison: ComparisonData = {

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth";
 import { maskDocument, maskPhone } from "@/lib/mask";
+import { bloquearSeExterno } from "@/lib/mesma-origem";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,10 @@ async function monitoredGET(request: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+    // /clientes is admin-only; enforce the same rule for direct API requests.
+    if (session.user.role !== "admin") {
+      return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
     }
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get("from")
@@ -57,21 +62,36 @@ async function monitoredGET(request: Request) {
       }
     }
 
-    // Buscar pedidos com relacionamentos
+    // Buscar pedidos — apenas os campos que a resposta abaixo usa.
+    //
+    // Antes isto era `include` em customer/affiliate.user/coupon/items.product,
+    // o que trazia as linhas inteiras de seis tabelas (User sozinho tem ~16 KB
+    // por linha) para montar um objeto de poucas centenas de bytes. Com 50
+    // pedidos por página dava ~1,7 MB por requisição, e esta rota respondia
+    // por quase todo o network transfer do projeto.
     const orders = await prisma.order.findMany({
       where,
-      include: {
-        customer: true,
-        affiliate: {
-          include: {
-            user: true,
-          },
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        paymentMethod: true,
+        installments: true,
+        affiliateId: true,
+        splitAmount: true,
+        createdAt: true,
+        pagarmeTransactionId: true,
+        utmSource: true,
+        utmCampaign: true,
+        customer: {
+          select: { name: true, email: true, document: true, phone: true },
         },
-        coupon: true,
+        affiliate: {
+          select: { user: { select: { name: true } } },
+        },
+        coupon: { select: { code: true } },
         items: {
-          include: {
-            product: true,
-          },
+          select: { product: { select: { name: true } } },
         },
       },
       skip,
@@ -135,4 +155,19 @@ async function monitoredGET(request: Request) {
   }
 }
 
-export const GET = withDbMonitoring("GET /api/sales", monitoredGET);
+const monitoredSalesGET = withDbMonitoring("GET /api/sales", monitoredGET);
+
+export async function GET(request: Request) {
+  // This endpoint supports from/to, not the analytics-only days parameter.
+  // Reject before authentication AND sampling so rejected polling does not
+  // read/write UserSession or insert monitoring samples in the database.
+  if (new URL(request.url).searchParams.has("days")) {
+    return NextResponse.json(
+      { error: "Parâmetro days não suportado nesta rota. Informe o período com from e to." },
+      { status: 400, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+  const externo = bloquearSeExterno(request, "/api/sales");
+  if (externo) return externo;
+  return monitoredSalesGET(request);
+}

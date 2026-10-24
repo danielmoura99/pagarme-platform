@@ -14,6 +14,10 @@ async function monitoredGET(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+    // Protect the data even when the caller bypasses the dashboard page.
+    if (session.user.role !== "admin") {
+      return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
+    }
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get("from")
       ? new Date(searchParams.get("from") as string)

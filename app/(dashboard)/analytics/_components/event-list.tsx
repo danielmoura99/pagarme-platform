@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { buscarAnalyticsPixels } from "./analytics-cache";
 
 interface LeadEvent {
   id: string;
@@ -77,8 +78,9 @@ export function EventsList({ fromDate, toDate }: { fromDate?: string; toDate?: s
       if (toDate) params.set("to", toDate);
       if (statusFilter === "checkout") params.set("eventType", "InitiateCheckout");
       if (statusFilter === "purchase") params.set("eventType", "Purchase");
-      const response = await fetch(`/api/analytics/pixels?${params}`);
-      const result: EventsData = await response.json();
+      const { data: result } = (await buscarAnalyticsPixels(
+        params.toString()
+      )) as { data: EventsData };
       setEvents(result.leadEvents || []);
       setTotalPages(result.totalPages || 1);
       setTotalCount(result.totalCount || 0);
