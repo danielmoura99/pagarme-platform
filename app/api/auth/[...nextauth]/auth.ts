@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db";
 import { compare } from "bcrypt";
 import crypto from "crypto";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -18,6 +19,24 @@ export const authOptions: NextAuthOptions = {
 
         if (!credentials?.email || !credentials?.password) {
           console.log("[AUTH_AUTHORIZE] Missing credentials");
+          return null;
+        }
+
+        // Limite por IP antes de ir ao banco.
+        //
+        // Toda tentativa de login precisa buscar o usuário para comparar a
+        // senha. Um cliente repetindo credencial inválida transformava isso
+        // em ~170 consultas por hora, o que sozinho já impedia o Neon de
+        // suspender o compute. 10 tentativas a cada 15 minutos é folgado
+        // para uma pessoa e inviável para um robô.
+        const ipHeader =
+          req?.headers?.["x-forwarded-for"] ?? req?.headers?.["x-real-ip"] ?? "unknown";
+        const ip = (Array.isArray(ipHeader) ? ipHeader[0] : ipHeader)
+          .split(",")[0]
+          .trim();
+
+        if (!checkRateLimit("login", ip, 10, 15 * 60_000).allowed) {
+          console.warn(`[AUTH_AUTHORIZE] Excesso de tentativas de login para o IP ${ip}`);
           return null;
         }
 

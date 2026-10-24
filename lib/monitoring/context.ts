@@ -51,9 +51,15 @@ export async function collectRequest<T>(
   const sample: Sample = { route, rate, startedAt: new Date(), operations: new Map(), closed: false };
   return monitoringContext.run(sample, async () => {
     let failed = false;
+    let recusada = false;
     try {
       const result = await handler();
       failed = result instanceof Response && result.status >= 500;
+      // Requisição barrada na porta (origem externa, sem sessão, excesso de
+      // tentativas) não consultou nada e não tem valor de análise. Gravar a
+      // amostra custaria uma escrita no banco — e é justamente a escrita que
+      // reinicia o timer de suspensão do Neon e mantém o compute aceso.
+      recusada = result instanceof Response && [401, 403, 429].includes(result.status);
       return result;
     } catch (error) {
       failed = true;
@@ -61,8 +67,10 @@ export async function collectRequest<T>(
     } finally {
       sample.closed = true;
       // Await persistence before the serverless invocation finishes. No background timers.
-      try { await monitoringContext.run(null, () => save(sample, failed)); }
-      catch { console.warn("[DB_MONITOR] Sample could not be persisted"); }
+      if (!recusada) {
+        try { await monitoringContext.run(null, () => save(sample, failed)); }
+        catch { console.warn("[DB_MONITOR] Sample could not be persisted"); }
+      }
     }
   });
 }
