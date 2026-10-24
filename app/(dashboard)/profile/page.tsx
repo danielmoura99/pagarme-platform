@@ -101,8 +101,25 @@ export default function ProfilePage() {
     return "Outro";
   };
 
+  // Mesmas regras de /api/user/change-password. Repetidas aqui só para dar
+  // o motivo na hora — a validação que vale continua sendo a do servidor.
+  const validarNovaSenha = (senha: string, confirmacao: string) => {
+    if (senha !== confirmacao) return "As novas senhas não coincidem";
+    if (senha.length < 8) return "A nova senha deve ter no mínimo 8 caracteres";
+    if (!/[A-Z]/.test(senha)) return "A senha precisa de ao menos 1 letra maiúscula";
+    if (!/[a-z]/.test(senha)) return "A senha precisa de ao menos 1 letra minúscula";
+    if (!/[0-9]/.test(senha)) return "A senha precisa de ao menos 1 número";
+    return null;
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const problema = validarNovaSenha(newPassword, confirmPassword);
+    if (problema) {
+      toast({ variant: "destructive", title: "Erro", description: problema });
+      return;
+    }
 
     try {
       setLoading(true);
@@ -241,11 +258,15 @@ export default function ProfilePage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Digite sua nova senha (mínimo 6 caracteres)"
+                    placeholder="Digite sua nova senha"
                     required
-                    minLength={6}
+                    minLength={8}
                     disabled={loading}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Mínimo de 8 caracteres, com ao menos 1 letra maiúscula, 1
+                    minúscula e 1 número.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -257,7 +278,7 @@ export default function ProfilePage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Digite novamente a nova senha"
                     required
-                    minLength={6}
+                    minLength={8}
                     disabled={loading}
                   />
                 </div>
